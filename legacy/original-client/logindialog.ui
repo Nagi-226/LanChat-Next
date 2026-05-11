@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LoginDialog</class>
+ <widget class="QDialog" name="LoginDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>520</width>
+    <height>360</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>520</width>
+    <height>360</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>LanChat 登录</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QDialog#LoginDialog {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1a1a2e, stop:1 #16213e);
+}
+QLabel#labelTitle {
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: bold;
+}
+QLabel#labelSubtitle {
+    color: #a0a0a0;
+    font-size: 12px;
+}
+QLabel {
+    color: #e0e0e0;
+}
+QLineEdit {
+    min-height: 38px;
+}
+QPushButton {
+    min-height: 40px;
+    min-width: 100px;
+}</string>
+  </property>
+  <widget class="QFrame" name="frameCard">
+   <property name="geometry">
+    <rect>
+     <x>40</x>
+     <y>30</y>
+     <width>440</width>
+     <height>300</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QFrame#frameCard {
+    background-color: rgba(22, 33, 62, 230);
+    border: 1px solid rgba(255,255,255,18);
+    border-radius: 20px;
+}</string>
+   </property>
+   <widget class="QLabel" name="labelTitle">
+    <property name="geometry">
+     <rect>
+      <x>32</x>
+      <y>24</y>
+      <width>220</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>LanChat-Next</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelSubtitle">
+    <property name="geometry">
+     <rect>
+      <x>32</x>
+      <y>58</y>
+      <width>320</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>输入服务器地址与账号信息以进入局域网聊天</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>32</x>
+      <y>102</y>
+      <width>80</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>服务器ip</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_serverIp">
+    <property name="geometry">
+     <rect>
+      <x>112</x>
+      <y>96</y>
+      <width>180</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>192.168.31.196</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_connect">
+    <property name="geometry">
+     <rect>
+      <x>304</x>
+      <y>95</y>
+      <width>104</width>
+      <height>36</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>连接</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>32</x>
+      <y>148</y>
+      <width>80</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>账号</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_id">
+    <property name="geometry">
+     <rect>
+      <x>112</x>
+      <y>142</y>
+      <width>296</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>32</x>
+      <y>194</y>
+      <width>80</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>密码</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_password">
+    <property name="geometry">
+     <rect>
+      <x>112</x>
+      <y>188</y>
+      <width>296</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+   </widget>
+   <widget class="QFrame" name="frameActions">
+    <property name="geometry">
+     <rect>
+      <x>112</x>
+      <y>240</y>
+      <width>296</width>
+      <height>44</height>
+     </rect>
+    </property>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <property name="spacing">
+      <number>12</number>
+     </property>
+     <property name="contentsMargins">
+      <left>0</left>
+      <top>0</top>
+      <right>0</right>
+      <bottom>0</bottom>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pushButton_login">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>登录</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_register">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>注册</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

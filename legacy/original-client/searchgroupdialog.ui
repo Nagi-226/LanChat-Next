@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SearchGroupDialog</class>
+ <widget class="QDialog" name="SearchGroupDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>520</width>
+    <height>560</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>520</width>
+    <height>560</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>LanChat 查找群聊</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QDialog#SearchGroupDialog { background: #1a1a2e; }
+QFrame#frameCard {
+    background: #16213e;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 18px;
+}
+QLabel#labelTitle { color: #ffffff; font-size: 20px; font-weight: bold; }
+QLabel#labelHint { color: #a0a0a0; }
+QLineEdit { min-height: 38px; }
+QListWidget {
+    background: rgba(0,0,0,0.12);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 6px;
+}
+QListWidget::item {
+    padding: 10px 12px;
+    margin: 3px 4px;
+    border-radius: 8px;
+}
+QListWidget::item:hover { background: rgba(255,255,255,0.05); }
+QListWidget::item:selected { background: rgba(233,69,96,0.25); }
+QPushButton { min-height: 38px; }
+</string>
+  </property>
+  <widget class="QFrame" name="frameCard">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>20</y>
+     <width>480</width>
+     <height>520</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="labelTitle">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>18</y>
+      <width>180</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>查找群聊</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelHint">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>48</y>
+      <width>340</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>在下方列表中选择群聊并加入</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_search">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>82</y>
+      <width>336</width>
+      <height>34</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_search">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>82</y>
+      <width>90</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>搜索</string>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="listWidget">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>134</y>
+      <width>440</width>
+      <height>316</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_join">
+    <property name="geometry">
+     <rect>
+      <x>356</x>
+      <y>466</y>
+      <width>104</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>加入</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

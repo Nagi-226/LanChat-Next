@@ -1,0 +1,28 @@
+# Build artifacts
+node_modules/
+dist/
+target/
+build/
+*.exe
+*.o
+*.db
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# Qt user configs
+*.pro.user
+*.pro.user.*
+
+# IDE
+.vs/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Nested (in case scaffold nests)
+src/client/node_modules/
+src/client/dist/
+src/client/src-tauri/target/

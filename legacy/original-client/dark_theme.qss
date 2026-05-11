@@ -1,0 +1,126 @@
+QDialog {
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+    font-family: "Microsoft YaHei";
+    font-size: 14px;
+}
+
+QWidget {
+    color: #e0e0e0;
+    font-family: "Microsoft YaHei";
+}
+
+QLabel {
+    color: #e0e0e0;
+    background: transparent;
+}
+
+QLabel#labelTitle,
+QLabel#label_hostname,
+QLabel#labelSidebarTitle,
+QLabel#labelChatTitle,
+QLabel#labelMemberTitle,
+QLabel#labelTitle {
+    color: #ffffff;
+    font-weight: bold;
+}
+
+QLabel#labelSubtitle,
+QLabel#labelHint,
+QLabel#labelSidebarHint,
+QLabel#label_userInfo,
+QLabel#labelChatMeta {
+    color: #a0a0a0;
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {
+    background-color: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    padding: 8px 12px;
+    selection-background-color: #e94560;
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {
+    border: 1px solid #e94560;
+}
+
+QPushButton {
+    background-color: #e94560;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #d63850;
+}
+
+QPushButton:pressed {
+    background-color: #c23045;
+}
+
+QPushButton:disabled {
+    background-color: #555b6e;
+    color: #a0a0a0;
+}
+
+QFrame#frameCard,
+QFrame#frameShell,
+QFrame#frameSidebar,
+QFrame#frameHeader,
+QFrame#frameMainPlaceholder,
+QFrame#cardFrame,
+QFrame#mainCard,
+QFrame#messageCard {
+    background-color: rgba(22, 33, 62, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+}
+
+QFrame#frameSidebar {
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+QListWidget {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QListWidget::item {
+    padding: 8px 12px;
+    margin: 2px 8px;
+    border-radius: 8px;
+}
+
+QListWidget::item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+QListWidget::item:selected {
+    background-color: rgba(233, 69, 96, 0.25);
+}
+
+QScrollBar:vertical {
+    width: 8px;
+    background: transparent;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 0.18);
+    min-height: 30px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}

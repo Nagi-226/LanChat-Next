@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GroupChatDialog</class>
+ <widget class="QDialog" name="GroupChatDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>820</width>
+    <height>620</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>760</width>
+    <height>560</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>LanChat 群聊</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QDialog#GroupChatDialog {
+    background: #1a1a2e;
+}
+QFrame#frameShell {
+    background: #16213e;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 18px;
+}
+QListWidget#listWidget_friends {
+    background: rgba(0,0,0,0.12);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+}
+QTextEdit#textEdit {
+    background: #1e2a45;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+QPushButton {
+    min-height: 36px;
+}
+QLabel#labelTitle,
+QLabel#labelMemberTitle {
+    color: #ffffff;
+    font-weight: bold;
+}
+QLabel#labelSubtitle {
+    color: #a0a0a0;
+}
+</string>
+  </property>
+  <widget class="QFrame" name="frameShell">
+   <property name="geometry">
+    <rect>
+     <x>18</x>
+     <y>16</y>
+     <width>784</width>
+     <height>588</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="labelTitle">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>16</y>
+      <width>260</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>群聊窗口</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color: #ffffff; font-size: 18px; font-weight: bold;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelSubtitle">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>44</y>
+      <width>360</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>适用于频道聊天、成员列表和群内消息流</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color: #a0a0a0;</string>
+    </property>
+   </widget>
+   <widget class="QTextEdit" name="textEdit">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>476</y>
+      <width>542</width>
+      <height>88</height>
+     </rect>
+    </property>
+    <property name="maximumSize">
+     <size>
+      <width>16777215</width>
+      <height>200</height>
+     </size>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_brow">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>424</y>
+      <width>90</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>表情</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_3">
+    <property name="geometry">
+     <rect>
+      <x>118</x>
+      <y>424</y>
+      <width>110</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>预留</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_send">
+    <property name="geometry">
+     <rect>
+      <x>572</x>
+      <y>476</y>
+      <width>184</width>
+      <height>88</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>发送</string>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="listWidget_friends">
+    <property name="geometry">
+     <rect>
+      <x>578</x>
+      <y>76</y>
+      <width>186</width>
+      <height>330</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>180</width>
+      <height>0</height>
+     </size>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelMemberTitle">
+    <property name="geometry">
+     <rect>
+      <x>578</x>
+      <y>52</y>
+      <width>140</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>成员列表</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color: #a0a0a0;</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="frameMessageArea">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>76</y>
+      <width>542</width>
+      <height>330</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: rgba(0,0,0,0.12); border-radius: 14px;</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

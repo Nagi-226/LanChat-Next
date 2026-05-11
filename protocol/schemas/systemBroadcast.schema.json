@@ -1,0 +1,92 @@
+﻿{
+    "$schema":  "https://json-schema.org/draft/2020-12/schema",
+    "$id":  "https://lanchat-next.local/protocol/schemas/systemBroadcast.schema.json",
+    "title":  "LanChat systemBroadcast",
+    "type":  "object",
+    "additionalProperties":  true,
+    "required":  [
+                     "type"
+                 ],
+    "properties":  {
+                       "type":  {
+                                    "const":  33
+                                },
+                       "timestamp":  {
+                                         "type":  "integer",
+                                         "minimum":  0
+                                     },
+                       "msg_id":  {
+                                      "type":  "string"
+                                  },
+                       "id":  {
+                                  "type":  "integer"
+                              },
+                       "password":  {
+                                        "type":  "string"
+                                    },
+                       "nickname":  {
+                                        "type":  "string"
+                                    },
+                       "headId":  {
+                                      "type":  "integer"
+                                  },
+                       "fromId":  {
+                                      "type":  "integer"
+                                  },
+                       "toId":  {
+                                    "type":  "integer"
+                                },
+                       "groupId":  {
+                                       "type":  "integer"
+                                   },
+                       "name":  {
+                                    "type":  "string"
+                                },
+                       "msg":  {
+                                   "type":  "string"
+                               },
+                       "users":  {
+                                     "type":  "array",
+                                     "items":  {
+                                                   "type":  "object"
+                                               }
+                                 },
+                       "groups":  {
+                                      "type":  "array",
+                                      "items":  {
+                                                    "type":  "object"
+                                                }
+                                  },
+                       "status":  {
+                                      "type":  "string"
+                                  },
+                       "request_id":  {
+                                          "type":  "string"
+                                      },
+                       "ai_type":  {
+                                       "enum":  [
+                                                    "summarize",
+                                                    "translate",
+                                                    "search",
+                                                    "chat"
+                                                ]
+                                   },
+                       "chunk_index":  {
+                                           "type":  "integer",
+                                           "minimum":  0
+                                       },
+                       "is_final":  {
+                                        "type":  "boolean"
+                                    },
+                       "file_name":  {
+                                         "type":  "string"
+                                     },
+                       "file_size":  {
+                                         "type":  "integer",
+                                         "minimum":  0
+                                     },
+                       "file_hash":  {
+                                         "type":  "string"
+                                     }
+                   }
+}
