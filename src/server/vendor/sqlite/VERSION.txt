@@ -1,0 +1,6 @@
+SQLite 3.45.1  DEFERRED for v1.2.0
+Amalgamation: sqlite3.c + sqlite3.h
+Upstream: https://www.sqlite.org/download.html
+Required compile flags: -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_JSON1
+Note: SQLite is not needed for v1.1.x (server only does heartbeat).
+      Vendor the amalgamation before starting v1.2.0 database work.

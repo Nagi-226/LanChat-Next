@@ -1,0 +1,6 @@
+bcrypt  DEFERRED for v1.2.0
+Upstream candidates:
+  - Openwall crypt_blowfish (C, minimal implementation ~2 files)
+  - bcrypt.h (C++ header-only wrapper for Win32 BCrypt API)
+Note: bcrypt is not needed for v1.1.x (server only does heartbeat, no auth).
+      Vendor the chosen implementation before starting v1.2.0 auth work.

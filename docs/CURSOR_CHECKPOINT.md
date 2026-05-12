@@ -43,15 +43,15 @@
 | Step | 任务 | 状态 |
 |------|------|------|
 | Step 1 | 脚手架初始化 (Tauri + React + TS) | 🟢 完成 |
-| Step 2 | 依赖安装 (Tailwind/Zustand) | 🟡 进行中 |
+| Step 2 | 依赖安装 (Tailwind/Zustand) | 🟢 完成 |
 | Step 3 | Tailwind CSS 配置 + 颜色令牌 | 🟢 完成 |
 | Step 4 | Zustand uiStore | 🟢 完成 |
 | Step 5 | 最小主窗口布局 (三栏) | 🟢 完成 |
 | Step 6 | TypeScript 协议类型 (`protocol/message_types.ts`) | 🟢 完成 |
-| Step 7 | Tauri 窗口配置 | 🟡 进行中 |
-| Step 8 | 清理 & 验证 | 🟡 进行中 |
+| Step 7 | Tauri 窗口配置 | 🟢 完成 |
+| Step 8 | 清理 & 验证 | 🟢 完成 |
 
-### 今天改了什么
+### 2026-05-11 改动
 - `src/client/postcss.config.cjs` — 新建 Tailwind v3 所需的 PostCSS 配置
 - `src/client/tailwind.config.ts` — 新建 v3 样式令牌配置与暗/浅色主题色板
 - `src/client/src/styles/global.css` — 新建全局 Tailwind 入口与滚动条/主题过渡样式
@@ -60,31 +60,80 @@
 - `protocol/message_types.ts` — 新建并对齐 34 种消息类型的 TypeScript 协议定义
 - `.gitignore` — 补充 node_modules / dist / target 及客户端构建产物
 
+### 2026-05-12 — Claude Code 验证 (v1.1.5 checkpoint)
+
+**验证结果**:
+
+| 验证项 | 结果 | 备注 |
+|--------|------|------|
+| `npm install` | ✅ 143 packages | tailwindcss/postcss/autoprefixer 补装 |
+| `npx tsc --noEmit` | ✅ 零错误 | |
+| `npm run build` (Vite) | ✅ 1.94s | CSS 7.4kB, JS 151.9kB gzip 49.2kB |
+| `cargo check` | ✅ 通过 | 2 个 harmless warning (unused fn) |
+| `npm run tauri dev` | ⬜ 未测 | 需要桌面 GUI 环境 |
+
+**发现并修复的问题**:
+1. `package.json` 缺少 `tailwindcss`、`postcss`、`autoprefixer`、`@types/node` — 已执行 `npm install` 补装
+2. `cargo clean` 后重编译通过 (首次因缓存锁失败)
+
 ### 阻塞问题
-- 目前无功能阻塞；后续需要根据实际安装环境验证 Tauri / Rust / Node 工具链
+- 无
 
 ### Pending C++ Changes (需 Claude Code 后续实现)
-- `src/server/` — C++ asio 服务端骨架
+- `src/server/` — C++ asio 服务端骨架 (v1.2.0)
 - `protocol/message_types.h` — 如需新增消息类型，Claude Code 先改，Gemini 同步 `.ts`
 
 ---
 
-## 模板（每天复制这段）
+## 2026-05-12 — Claude Code (DeepSeek-V4-Pro) 接手 Gemini 3.1 Pro
 
-```
-## 2026-05-XX — v1.1.0 Day X
+### 接手时状态
+- v1.1.0 客户端脚手架 8 Steps 全部 🟢
+- v1.1.5 checkpoint 验证基线通过
+- C++ server 已基于 vendored mini-asio 实现异步网络层（TcpServer + AsyncSession）
+- Rust backend 已有 connect/disconnect/send_raw_json + 读循环 + 事件发射
 
-### 今天改了什么
-- [文件] — [改动]
+### v1.2.0 前端组件化（本日完成）
 
-### Step 完成状态
-| Step | 状态 |
+| 组件 | 文件 | 对标 Qt | 状态 |
+|------|------|---------|------|
+| LoginPanel | `src/components/LoginPanel.tsx` | logindialog.ui | 🟢 |
+| RegisterPanel | `src/components/RegisterPanel.tsx` | registerdialog.ui | 🟢 |
+| ChatArea | `src/components/ChatArea.tsx` | chatdialog.ui | 🟢 |
+| GroupChatArea | `src/components/GroupChatArea.tsx` | groupchatdialog.ui | 🟢 |
+| ContactList | `src/components/ContactList.tsx` | mainwindow.ui 左栏 | 🟢 |
+| Sidebar | `src/components/Sidebar.tsx` | mainwindow.ui 右栏 | 🟢 |
+| ConnectionBar | `src/components/ConnectionBar.tsx` | — | 🟢 已存在 |
+
+### Stores & 前后端对接
+
+| 模块 | 文件 | 状态 |
+|------|------|------|
+| connectionStore | `src/stores/connectionStore.ts` | 🟢 connect/disconnect/sendRawJson/heartbeat |
+| chatStore | `src/stores/chatStore.ts` | 🟢 auth flow + 消息收发 + 联系人管理 + 事件处理 |
+| App.tsx 整合 | `src/App.tsx` | 🟢 auth 门控 + ContactList/ChatArea/Sidebar + Tauri 事件监听 |
+
+### 修复
+
+| 项 | 改动 |
+|----|------|
+| package.json | 补 @types/node → devDependencies |
+| capabilities/default.json | 加 core:event:default 权限（事件 listen/emit 必需） |
+
+### 验证结果 (verify_v1_1_5.ps1)
+
+| 阶段 | 结果 |
 |------|------|
-| ... | 🟢/🟡/🔴 |
+| Protocol audit (34 schemas) | ✅ |
+| CMake build + ctest (frame_codec) | ✅ 100% |
+| Vite build (58 modules, 1.43s) | ✅ |
+| Cargo check | ✅ |
 
 ### 阻塞问题
-- 
+- 无
 
-### Pending C++ Changes
-- 
-```
+### 待桌面测试（需 `npm run tauri dev`）
+- [ ] LoginPanel → connect → LoginMessage JSON → send_raw_json → LoginSuccessReturn → UI 跳转
+- [ ] 实时消息收发：SendMsg → C++ server 转发 → ReceiveMsg → Tauri event → chatStore → 气泡渲染
+- [ ] 暗色/浅色主题切换 + localStorage 持久化
+- [ ] 心跳机制：Heartbeat → HeartbeatAck → updateHeartbeat

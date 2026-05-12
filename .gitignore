@@ -3,6 +3,8 @@ node_modules/
 dist/
 target/
 build/
+logs/
+data/
 *.exe
 *.o
 *.db
@@ -26,3 +28,4 @@ Thumbs.db
 src/client/node_modules/
 src/client/dist/
 src/client/src-tauri/target/
+src/client/src-tauri/gen/

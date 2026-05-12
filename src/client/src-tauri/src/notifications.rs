@@ -1,3 +1,3 @@
 ﻿pub fn notify_skeleton_ready() {
-    // Placeholder for Tauri notification plugin wiring in v1.3+.
+    println!("[lanchat-client] v1.1.8 Tauri shell initialized");
 }

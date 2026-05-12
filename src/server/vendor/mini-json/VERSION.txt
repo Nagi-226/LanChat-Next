@@ -1,0 +1,5 @@
+mini-json v1.0.0
+Minimal JSON parser/serializer for LanChat-Next.
+Replaces: nlohmann/json 3.11.3
+Upstream: https://github.com/nlohmann/json
+Note: Self-contained implementation. Replace with real nlohmann/json when network is available.

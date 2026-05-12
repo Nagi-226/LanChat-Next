@@ -1,92 +1,94 @@
-﻿{
-    "$schema":  "https://json-schema.org/draft/2020-12/schema",
-    "$id":  "https://lanchat-next.local/protocol/schemas/offlineMessages.schema.json",
-    "title":  "LanChat offlineMessages",
-    "type":  "object",
-    "additionalProperties":  true,
-    "required":  [
-                     "type"
-                 ],
-    "properties":  {
-                       "type":  {
-                                    "const":  22
-                                },
-                       "timestamp":  {
-                                         "type":  "integer",
-                                         "minimum":  0
-                                     },
-                       "msg_id":  {
-                                      "type":  "string"
-                                  },
-                       "id":  {
-                                  "type":  "integer"
-                              },
-                       "password":  {
-                                        "type":  "string"
-                                    },
-                       "nickname":  {
-                                        "type":  "string"
-                                    },
-                       "headId":  {
-                                      "type":  "integer"
-                                  },
-                       "fromId":  {
-                                      "type":  "integer"
-                                  },
-                       "toId":  {
-                                    "type":  "integer"
-                                },
-                       "groupId":  {
-                                       "type":  "integer"
-                                   },
-                       "name":  {
-                                    "type":  "string"
-                                },
-                       "msg":  {
-                                   "type":  "string"
-                               },
-                       "users":  {
-                                     "type":  "array",
-                                     "items":  {
-                                                   "type":  "object"
-                                               }
-                                 },
-                       "groups":  {
-                                      "type":  "array",
-                                      "items":  {
-                                                    "type":  "object"
-                                                }
-                                  },
-                       "status":  {
-                                      "type":  "string"
-                                  },
-                       "request_id":  {
-                                          "type":  "string"
-                                      },
-                       "ai_type":  {
-                                       "enum":  [
-                                                    "summarize",
-                                                    "translate",
-                                                    "search",
-                                                    "chat"
-                                                ]
-                                   },
-                       "chunk_index":  {
-                                           "type":  "integer",
-                                           "minimum":  0
-                                       },
-                       "is_final":  {
-                                        "type":  "boolean"
-                                    },
-                       "file_name":  {
-                                         "type":  "string"
-                                     },
-                       "file_size":  {
-                                         "type":  "integer",
-                                         "minimum":  0
-                                     },
-                       "file_hash":  {
-                                         "type":  "string"
-                                     }
-                   }
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lanchat-next.local/protocol/schemas/offlineMessages.schema.json",
+  "title": "LanChat offlineMessages",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "messages"
+  ],
+  "properties": {
+    "type": {
+      "const": 22
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "msg_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "$defs": {
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "nickname"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "headId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error",
+            "failed",
+            "start",
+            "done"
+          ]
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "groupId",
+        "name"
+      ],
+      "properties": {
+        "groupId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "hostId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/user"
+          }
+        }
+      }
+    }
+  }
 }

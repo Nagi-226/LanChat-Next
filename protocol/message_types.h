@@ -2,7 +2,7 @@
 #define LANCHAT_MESSAGE_TYPES_H
 
 // ============================================================
-// LanChat Protocol — Message Type Definitions
+// LanChat Protocol  Message Type Definitions
 // ============================================================
 // This header is framework-agnostic (no Qt dependency).
 // It can be included by:
@@ -25,62 +25,62 @@ namespace protocol {
 // ============================================================
 enum class MsgType : int {
     // --- Auth (0-4) ---
-    RegisterUser       = 0,   // Client → Server: register new user
-    RegisterUserReturn = 1,   // Server → Client: registration result with assigned ID
-    Login              = 2,   // Client → Server: login request
-    LoginSuccessReturn = 3,   // Server → Client: login success + friend list
-    LoginFailedReturn  = 4,   // Server → Client: login failed
+    RegisterUser       = 0,   // Client  Server: register new user
+    RegisterUserReturn = 1,   // Server  Client: registration result with assigned ID
+    Login              = 2,   // Client  Server: login request
+    LoginSuccessReturn = 3,   // Server  Client: login success + friend list
+    LoginFailedReturn  = 4,   // Server  Client: login failed
 
     // --- Private Chat (5-6) ---
-    SendMsg            = 5,   // Client → Server: send private message
-    ReceiveMsg         = 6,   // Server → Client: deliver private message
+    SendMsg            = 5,   // Client  Server: send private message
+    ReceiveMsg         = 6,   // Server  Client: deliver private message
 
     // --- Presence (7-8) ---
-    UserOnline         = 7,   // Server → Client: user came online
-    UserOffline        = 8,   // Server → Client: user went offline
+    UserOnline         = 7,   // Server  Client: user came online
+    UserOffline        = 8,   // Server  Client: user went offline
 
     // --- Group Management (9-15) ---
-    CreateGroup        = 9,   // Client → Server: create group channel
-    CreateGroupReturn  = 10,  // Server → Client: group created with ID
-    SearchGroup        = 11,  // Client → Server: search groups by name
-    SearchGroupReturn  = 12,  // Server → Client: search results
-    JoinGroup          = 13,  // Client → Server: request to join group
-    JoinGroupReturn    = 14,  // Server → Client: join result + member list
-    LeaveGroup         = 15,  // Client → Server: leave a group
+    CreateGroup        = 9,   // Client  Server: create group channel
+    CreateGroupReturn  = 10,  // Server  Client: group created with ID
+    SearchGroup        = 11,  // Client  Server: search groups by name
+    SearchGroupReturn  = 12,  // Server  Client: search results
+    JoinGroup          = 13,  // Client  Server: request to join group
+    JoinGroupReturn    = 14,  // Server  Client: join result + member list
+    LeaveGroup         = 15,  // Client  Server: leave a group
 
     // --- Group Chat (16-19) ---
-    SendGroupMsg       = 16,  // Client → Server: send group message
-    ReceiveGroupMsg    = 17,  // Server → Client: deliver group message
-    UserJoinGroup      = 18,  // Server → Client: broadcast new member
-    UserLeaveGroup     = 19,  // Server → Client: broadcast member left
+    SendGroupMsg       = 16,  // Client  Server: send group message
+    ReceiveGroupMsg    = 17,  // Server  Client: deliver group message
+    UserJoinGroup      = 18,  // Server  Client: broadcast new member
+    UserLeaveGroup     = 19,  // Server  Client: broadcast member left
 
     // ============================================================
     // New message types (20-33) for LanChat-Next v1.1.0+
     // ============================================================
 
     // --- Connection Health (20-21) ---
-    Heartbeat          = 20,  // Client → Server: keepalive ping
-    HeartbeatAck       = 21,  // Server → Client: keepalive pong
+    Heartbeat          = 20,  // Client  Server: keepalive ping
+    HeartbeatAck       = 21,  // Server  Client: keepalive pong
 
     // --- Offline & History (22-25) ---
-    OfflineMessages    = 22,  // Server → Client: push queued offline messages
-    Logout             = 23,  // Client → Server: explicit logout
-    RequestHistory     = 24,  // Client → Server: request message history
-    HistoryResponse    = 25,  // Server → Client: paginated history response
+    OfflineMessages    = 22,  // Server  Client: push queued offline messages
+    Logout             = 23,  // Client  Server: explicit logout
+    RequestHistory     = 24,  // Client  Server: request message history
+    HistoryResponse    = 25,  // Server  Client: paginated history response
 
     // --- File Transfer (26-28) ---
-    SendFile           = 26,  // Client → Server: file transfer request
-    ReceiveFile        = 27,  // Server → Client: incoming file notification
+    SendFile           = 26,  // Client  Server: file transfer request
+    ReceiveFile        = 27,  // Server  Client: incoming file notification
     FileTransferDone   = 28,  // Bidirectional: transfer complete ack
 
     // --- AI Features (29-31) ---
-    AIRequest          = 29,  // Client → Server: AI request (summarize/translate/search)
-    AIResponse         = 30,  // Server → Client: AI result (start/done/error)
-    AIStreamChunk      = 31,  // Server → Client: streaming text chunk
+    AIRequest          = 29,  // Client  Server: AI request (summarize/translate/search)
+    AIResponse         = 30,  // Server  Client: AI result (start/done/error)
+    AIStreamChunk      = 31,  // Server  Client: streaming text chunk
 
     // --- Profile & Admin (32-33) ---
-    UserProfileUpdate  = 32,  // Client → Server: update nickname/avatar
-    SystemBroadcast    = 33   // Server → Client: admin broadcast message
+    UserProfileUpdate  = 32,  // Client  Server: update nickname/avatar
+    SystemBroadcast    = 33   // Server  Client: admin broadcast message
 };
 
 // ============================================================

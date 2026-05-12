@@ -1,15 +1,20 @@
-﻿#ifndef LANCHAT_SERVER_TCP_SERVER_H
-#define LANCHAT_SERVER_TCP_SERVER_H
+#pragma once
 
-#include <atomic>
+#include "AsyncSession.h"
+#include "mini_asio.hpp"
+
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace lanchat::server {
 
+namespace db { class UserRepository; }
+
 class TcpServer {
 public:
-    explicit TcpServer(std::uint16_t port);
+    explicit TcpServer(std::uint16_t port, db::UserRepository* users = nullptr);
     ~TcpServer();
 
     TcpServer(const TcpServer&) = delete;
@@ -18,14 +23,20 @@ public:
     int run();
     void stop();
 
+    void onMessage(std::shared_ptr<AsyncSession> session, const std::string& json);
+    void removeSession(uint64_t sessionId);
+    void broadcast(const std::string& json, uint64_t excludeSessionId = 0);
+    size_t connectionCount() const;
+
 private:
-    void handleClient(std::uintptr_t socketHandle);
-    std::string responseFor(const std::string& request) const;
+    void startAccept();
+    std::string dispatchResponse(const std::string& request) const;
 
     std::uint16_t port_;
-    std::atomic<bool> running_{false};
+    vendor::asio::io_context ctx_;
+    std::unique_ptr<vendor::asio::ip::tcp::acceptor> acceptor_;
+    std::unordered_map<uint64_t, std::shared_ptr<AsyncSession>> sessions_;
+    db::UserRepository* users_ = nullptr;
 };
 
 } // namespace lanchat::server
-
-#endif // LANCHAT_SERVER_TCP_SERVER_H

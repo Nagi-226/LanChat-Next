@@ -1,0 +1,5 @@
+mini-spdlog v1.0.0
+Minimal thread-safe logger for LanChat-Next.
+Replaces: spdlog 1.13.0
+Upstream: https://github.com/gabime/spdlog
+Note: Self-contained implementation. Replace with real spdlog when network is available.

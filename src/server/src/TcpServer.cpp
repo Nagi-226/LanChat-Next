@@ -1,142 +1,168 @@
-﻿#include "lanchat/server/TcpServer.h"
+#include "lanchat/server/TcpServer.h"
 
-#include "lanchat/server/FrameCodec.h"
+#include "lanchat/server/ServerLogger.h"
+#include "lanchat/server/db/UserRepository.h"
 
-#include <array>
-#include <iostream>
-#include <thread>
-#include <vector>
-
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
+#include <stdexcept>
 
 namespace lanchat::server {
-namespace {
-#ifdef _WIN32
-using Socket = SOCKET;
-constexpr Socket kInvalidSocket = INVALID_SOCKET;
-void closeSocket(Socket socket) { closesocket(socket); }
-#else
-using Socket = int;
-constexpr Socket kInvalidSocket = -1;
-void closeSocket(Socket socket) { close(socket); }
-#endif
+
+TcpServer::TcpServer(std::uint16_t port, db::UserRepository* users)
+    : port_(port), users_(users) {}
+
+TcpServer::~TcpServer() {
+    stop();
 }
 
-TcpServer::TcpServer(std::uint16_t port) : port_(port) {}
-TcpServer::~TcpServer() { stop(); }
+int TcpServer::run() {
+    try {
+        ServerLogger::instance().init("logs");
+        ServerLogger::instance().info("LanChat server-next v1.1.9-prep starting");
 
-void TcpServer::stop()
-{
-    running_ = false;
+        acceptor_ = std::make_unique<vendor::asio::ip::tcp::acceptor>(ctx_, port_);
+        ServerLogger::instance().info(
+            "listening on 0.0.0.0:" + std::to_string(port_));
+
+        startAccept();
+        ctx_.run();
+
+        ServerLogger::instance().info("server stopped");
+        return 0;
+    } catch (const std::exception& e) {
+        ServerLogger::instance().error(
+            std::string("server failed to start: ") + e.what());
+        return 1;
+    }
 }
 
-int TcpServer::run()
-{
-#ifdef _WIN32
-    WSADATA data{};
-    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
-        std::cerr << "WSAStartup failed\n";
-        return 1;
-    }
-#endif
-
-    Socket listener = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listener == kInvalidSocket) {
-        std::cerr << "socket() failed\n";
-        return 1;
-    }
-
-    int reuse = 1;
-    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse), sizeof(reuse));
-
-    sockaddr_in address{};
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(port_);
-
-    if (::bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
-        std::cerr << "bind() failed on port " << port_ << "\n";
-        closeSocket(listener);
-        return 1;
-    }
-
-    if (::listen(listener, SOMAXCONN) != 0) {
-        std::cerr << "listen() failed\n";
-        closeSocket(listener);
-        return 1;
-    }
-
-    running_ = true;
-    std::cout << "LanChat server-next listening on 0.0.0.0:" << port_ << "\n";
-#ifdef LANCHAT_HAS_STANDALONE_ASIO
-    std::cout << "standalone asio detected; full async implementation is scheduled for v1.1.3\n";
-#else
-    std::cout << "using WinSock/POSIX listener fallback for the v1.1.0 skeleton\n";
-#endif
-
-    while (running_) {
-        Socket client = ::accept(listener, nullptr, nullptr);
-        if (client == kInvalidSocket) {
-            continue;
-        }
-        std::thread(&TcpServer::handleClient, this, static_cast<std::uintptr_t>(client)).detach();
-    }
-
-    closeSocket(listener);
-#ifdef _WIN32
-    WSACleanup();
-#endif
-    return 0;
+void TcpServer::stop() {
+    ctx_.stop();
 }
 
-void TcpServer::handleClient(std::uintptr_t socketHandle)
-{
-    auto client = static_cast<Socket>(socketHandle);
-    std::vector<std::uint8_t> buffer;
-    std::array<char, 4096> chunk{};
+void TcpServer::startAccept() {
+    auto session = std::make_shared<AsyncSession>(ctx_, *this);
+    acceptor_->async_accept(session->socket(),
+        [this, session](vendor::asio::error_code ec) {
+            if (!ec) {
+                session->start();
+                sessions_[session->id()] = session;
+                ServerLogger::instance().debug(
+                    "accepted session " + std::to_string(session->id())
+                    + ", total: " + std::to_string(sessions_.size()));
+            }
+            startAccept(); // chain next accept
+        });
+}
 
-    while (running_) {
-#ifdef _WIN32
-        const int received = ::recv(client, chunk.data(), static_cast<int>(chunk.size()), 0);
-#else
-        const int received = static_cast<int>(::recv(client, chunk.data(), chunk.size(), 0));
-#endif
-        if (received <= 0) {
-            break;
-        }
+void TcpServer::onMessage(std::shared_ptr<AsyncSession> session,
+                          const std::string& json) {
+    session->deliver(dispatchResponse(json));
+}
 
-        buffer.insert(buffer.end(), chunk.begin(), chunk.begin() + received);
-        std::string request;
-        while (FrameCodec::tryDecode(buffer, request)) {
-            const auto response = FrameCodec::encode(responseFor(request));
-#ifdef _WIN32
-            ::send(client, reinterpret_cast<const char*>(response.data()), static_cast<int>(response.size()), 0);
-#else
-            ::send(client, response.data(), response.size(), 0);
-#endif
+void TcpServer::removeSession(uint64_t sessionId) {
+    sessions_.erase(sessionId);
+    ServerLogger::instance().debug(
+        "session " + std::to_string(sessionId)
+        + " removed, remaining: " + std::to_string(sessions_.size()));
+}
+
+void TcpServer::broadcast(const std::string& json, uint64_t excludeSessionId) {
+    for (auto& [id, session] : sessions_) {
+        if (id != excludeSessionId) {
+            session->deliver(json);
         }
     }
-
-    closeSocket(client);
 }
 
-std::string TcpServer::responseFor(const std::string& request) const
-{
-    if (request.find("\"type\":20") != std::string::npos || request.find("\"type\": 20") != std::string::npos) {
+size_t TcpServer::connectionCount() const {
+    return sessions_.size();
+}
+
+std::string TcpServer::dispatchResponse(const std::string& request) const {
+    // Heartbeat is handled by AsyncSession::onMessage (which also tracks
+    // heartbeat timestamps).  This check remains as a safety net for any
+    // future code path that calls dispatchResponse directly.
+    if (request.find("\"type\":20") != std::string::npos ||
+        request.find("\"type\": 20") != std::string::npos) {
         return R"({"type":21,"status":"ok"})";
     }
-    return R"({"type":33,"status":"ok","msg":"server-next skeleton received frame"})";
+
+    // Quick field extraction helpers
+    auto findInt = [&](const char* key) -> int {
+        std::string pat = std::string("\"") + key + "\":";
+        auto pos = request.find(pat);
+        if (pos == std::string::npos) return -1;
+        pos += pat.size();
+        while (pos < request.size() && (request[pos] == ' ' || request[pos] == '\t')) ++pos;
+        if (pos < request.size() && request[pos] == '"') return -1; // string, not int
+        int val = 0;
+        while (pos < request.size() && request[pos] >= '0' && request[pos] <= '9') {
+            val = val * 10 + (request[pos] - '0');
+            ++pos;
+        }
+        return val > 0 ? val : -1;
+    };
+    auto findStr = [&](const char* key) -> std::string {
+        std::string pat = std::string("\"") + key + "\":\"";
+        auto pos = request.find(pat);
+        if (pos == std::string::npos) return "";
+        pos += pat.size();
+        std::string val;
+        while (pos < request.size() && request[pos] != '"') {
+            val += request[pos++];
+        }
+        return val;
+    };
+
+    // Register
+    if (request.find("\"type\":0") != std::string::npos ||
+        request.find("\"type\": 0") != std::string::npos) {
+        if (users_) {
+            std::string nickname = findStr("nickname");
+            std::string password = findStr("password");
+            if (nickname.empty()) nickname = findStr("name");
+            if (nickname.empty()) nickname = "user_" + std::to_string(std::time(nullptr));
+            if (password.empty()) password = "default";
+            int id = users_->create(password, nickname, 0);
+            if (id > 0) {
+                return R"({"type":1,"status":"ok","id":)" + std::to_string(id)
+                     + R"(,"msg":"registered"})";
+            }
+            return R"({"type":1,"status":"error","msg":"nickname taken or invalid"})";
+        }
+        return R"xx({"type":1,"status":"ok","id":1001,"msg":"registered (no db)"})xx";
+    }
+
+    // Login
+    if (request.find("\"type\":2") != std::string::npos ||
+        request.find("\"type\": 2") != std::string::npos) {
+        if (users_) {
+            int uid = findInt("id");
+            std::string password = findStr("password");
+            if (uid > 0 && users_->verifyPassword(uid, password)) {
+                auto user = users_->findById(uid);
+                if (user.has_value()) {
+                    return R"({"type":3,"id":)" + std::to_string(uid)
+                         + R"(,"nickname":")" + user->nickname
+                         + R"(","headId":)" + std::to_string(user->avatar_id)
+                         + R"(,"friends":[],"groups":[]})";
+                }
+            }
+            return R"({"type":4,"status":"error","code":401,"msg":"invalid credentials"})";
+        }
+        return R"({"type":3,"id":1,"nickname":"Demo User","headId":0,"friends":[],"groups":[]})";
+    }
+
+    // Send message (echo fallback)
+    if (request.find("\"type\":5") != std::string::npos ||
+        request.find("\"type\": 5") != std::string::npos) {
+        std::string msg = findStr("msg");
+        if (msg.empty()) msg = "echo";
+        return R"({"type":6,"fromId":0,"toId":0,"nickname":"server","headId":0,"msg":")"
+             + msg + R"(","content_type":"text"})";
+    }
+
+    return R"({"type":33,"status":"ok","msg":"server-next v1.2.0 received frame"})";
 }
 
 } // namespace lanchat::server
