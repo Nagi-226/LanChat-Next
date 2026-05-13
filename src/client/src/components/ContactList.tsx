@@ -1,4 +1,6 @@
-﻿export interface Contact {
+﻿import BorderGlow from '../lib/BorderGlow';
+
+export interface Contact {
   id: number;
   nickname: string;
   headId?: number;
@@ -26,13 +28,25 @@ const statusLabel: Record<Contact['status'], string> = {
   busy: 'Busy',
 };
 
+function getInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/).slice(0, 2);
+  return parts.map((part) => part.charAt(0)).join('').toUpperCase();
+}
+
 export function ContactList({ contacts, selectedId, onSelect, onLogout }: ContactListProps) {
   return (
     <aside className="flex w-sidebar flex-shrink-0 flex-col border-r border-light-border bg-light-sidebar dark:border-dark-border dark:bg-dark-sidebar">
       <div className="flex h-10 items-center justify-between border-b border-light-border px-4 dark:border-dark-border">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-light-muted dark:text-dark-muted">
-          Contacts
-        </h2>
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-light-muted dark:text-dark-muted">
+            Contacts
+          </h2>
+          <p className="text-[10px] text-light-muted/70 dark:text-dark-muted/70">
+            {contacts.length} available
+          </p>
+        </div>
         <button
           type="button"
           onClick={onLogout}
@@ -50,7 +64,7 @@ export function ContactList({ contacts, selectedId, onSelect, onLogout }: Contac
         )}
         {contacts.map((c) => {
           const active = c.id === selectedId;
-          return (
+          const btn = (
             <button
               key={c.id}
               type="button"
@@ -61,7 +75,7 @@ export function ContactList({ contacts, selectedId, onSelect, onLogout }: Contac
             >
               <div className="relative flex-shrink-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-dark-accent text-sm text-dark-text">
-                  {c.nickname.charAt(0)}
+                  {getInitials(c.nickname)}
                 </div>
                 <span
                   className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-light-sidebar dark:border-dark-sidebar ${statusColor[c.status]}`}
@@ -70,12 +84,21 @@ export function ContactList({ contacts, selectedId, onSelect, onLogout }: Contac
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-light-text dark:text-dark-text">
-                  {c.nickname}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="truncate text-sm font-medium text-light-text dark:text-dark-text">
+                    {c.nickname}
+                  </div>
+                  <span className="shrink-0 text-[10px] text-light-muted dark:text-dark-muted">
+                    #{c.id}
+                  </span>
                 </div>
-                {c.lastMessage && (
+                {c.lastMessage ? (
                   <div className="truncate text-[11px] text-light-muted dark:text-dark-muted">
                     {c.lastMessage}
+                  </div>
+                ) : (
+                  <div className="truncate text-[11px] text-light-muted/60 dark:text-dark-muted/60">
+                    No message preview yet
                   </div>
                 )}
               </div>
@@ -86,6 +109,13 @@ export function ContactList({ contacts, selectedId, onSelect, onLogout }: Contac
                 </span>
               )}
             </button>
+          );
+          return active ? (
+            <BorderGlow key={c.id} borderRadius={0} glowRadius={20} glowIntensity={0.6} animated>
+              {btn}
+            </BorderGlow>
+          ) : (
+            btn
           );
         })}
       </div>

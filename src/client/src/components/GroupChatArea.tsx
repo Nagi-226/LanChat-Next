@@ -1,5 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from './ChatArea';
+import ClickSpark from '../lib/ClickSpark';
 
 interface Member {
   id: number;
@@ -25,6 +26,13 @@ function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
+function getInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/).slice(0, 2);
+  return parts.map((part) => part.charAt(0)).join('').toUpperCase();
+}
+
 export function GroupChatArea({ messages, members, currentUserId, groupName, onSend }: GroupChatAreaProps) {
   const [input, setInput] = useState('');
   const [showMembers, setShowMembers] = useState(true);
@@ -41,11 +49,19 @@ export function GroupChatArea({ messages, members, currentUserId, groupName, onS
     setInput('');
   };
 
+  const messageCount = messages.length;
+  const memberCount = members.length;
+
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-12 items-center justify-between border-b border-light-border px-4 dark:border-dark-border">
-          <span className="text-sm font-semibold text-light-text dark:text-dark-text"># {groupName}</span>
+          <div>
+            <span className="text-sm font-semibold text-light-text dark:text-dark-text"># {groupName}</span>
+            <p className="text-[10px] text-light-muted dark:text-dark-muted">
+              {messageCount} messages · {memberCount} members
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => setShowMembers((v) => !v)}
@@ -56,12 +72,19 @@ export function GroupChatArea({ messages, members, currentUserId, groupName, onS
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
+          {messages.length === 0 && (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-light-muted dark:text-dark-muted">
+                No group messages yet.
+              </p>
+            </div>
+          )}
           {messages.map((msg) => {
             const isSelf = msg.fromId === currentUserId;
             return (
               <div key={msg.id} className={`mb-3 flex gap-2 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`}>
                 <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-dark-accent text-xs text-dark-text">
-                  {msg.nickname.charAt(0)}
+                  {getInitials(msg.nickname)}
                 </div>
                 <div className={`max-w-[70%] ${isSelf ? 'items-end' : 'items-start'}`}>
                   <div className="mb-0.5 text-xs text-light-muted dark:text-dark-muted">
@@ -95,17 +118,19 @@ export function GroupChatArea({ messages, members, currentUserId, groupName, onS
               rows={1}
               className="max-h-[120px] min-h-[40px] flex-1 resize-none rounded-lg border border-light-border bg-white px-3 py-2 text-sm text-light-text placeholder-light-muted focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text"
             />
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-dark-highlight text-white disabled:opacity-50"
-              aria-label="Send group message"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.5 1.5L15 8L1.5 14.5L4.5 8L1.5 1.5Z" />
-              </svg>
-            </button>
+            <ClickSpark sparkColor="#e94560" sparkCount={6} sparkSize={6}>
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-dark-highlight text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+                aria-label="Send group message"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1.5 1.5L15 8L1.5 14.5L4.5 8L1.5 1.5Z" />
+                </svg>
+              </button>
+            </ClickSpark>
           </div>
         </div>
       </div>
@@ -122,7 +147,7 @@ export function GroupChatArea({ messages, members, currentUserId, groupName, onS
               <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="relative flex-shrink-0">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-dark-accent text-xs text-dark-text">
-                    {m.nickname.charAt(0)}
+                    {getInitials(m.nickname)}
                   </div>
                   <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-light-sidebar dark:border-dark-sidebar ${statusDot[m.status ?? 'offline']}`} />
                 </div>

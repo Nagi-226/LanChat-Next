@@ -1,6 +1,8 @@
 #include "lanchat/server/db/Database.h"
 #include "lanchat/server/ServerLogger.h"
 
+#include <sqlite3.h>
+
 #ifdef _WIN32
 #include <direct.h>
 #define mkdir(p) _mkdir(p)
@@ -9,9 +11,7 @@
 #endif
 
 #include <algorithm>
-#include <fstream>
 #include <sstream>
-#include <unordered_map>
 
 namespace lanchat::server::db {
 
@@ -22,24 +22,37 @@ Database::~Database() { close(); }
 bool Database::open() {
     mkdir(data_dir_.c_str());
 
-    // Load schema version
+    std::string dbPath = data_dir_ + "/lanchat.db";
+    int rc = sqlite3_open(dbPath.c_str(), &db_);
+    if (rc != SQLITE_OK) {
+        ServerLogger::instance().error(
+            "Failed to open database: " + std::string(sqlite3_errmsg(db_)));
+        return false;
+    }
+
+    sqlite3_exec(db_, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "PRAGMA foreign_keys=ON;", nullptr, nullptr, nullptr);
+
     if (!tableExists("schema_version")) {
         ensureTable("schema_version");
         Row v;
         v["version"] = vendor::json::Value(static_cast<int64_t>(0));
         insert("schema_version", v);
     }
-    auto rows = query("schema_version");
-    int version = rows.empty() ? 0 : static_cast<int>(rows[0].at("version").as_int());
 
+    int version = schemaVersion();
     ServerLogger::instance().info(
-        "Database opened: " + data_dir_ + ", schema v" + std::to_string(version));
+        "Database opened: " + dbPath + ", schema v" + std::to_string(version));
     return true;
 }
 
 void Database::close() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     tables_.clear();
+    if (db_) {
+        sqlite3_close(db_);
+        db_ = nullptr;
+    }
 }
 
 int Database::schemaVersion() const {
@@ -61,21 +74,33 @@ void Database::setSchemaVersion(int version) {
 }
 
 bool Database::tableExists(const std::string& name) const {
-    std::string path = data_dir_ + "/" + name + ".json";
-    std::ifstream f(path);
-    return f.good();
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    sqlite3_stmt* stmt = nullptr;
+    bool exists = false;
+    const char* sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?;";
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
+        exists = (sqlite3_step(stmt) == SQLITE_ROW);
+    }
+    sqlite3_finalize(stmt);
+    return exists;
 }
 
 void Database::ensureTable(const std::string& name) {
-    if (!tableExists(name)) {
-        RowList empty;
-        tables_[name] = empty;
-        saveTable(name);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (tableExists(name)) return;
+    char* errMsg = nullptr;
+    std::string sql = "CREATE TABLE \"" + name + "\" (data TEXT NOT NULL);";
+    if (sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        ServerLogger::instance().error("Failed to ensure table " + name + ": " +
+                                       (errMsg ? errMsg : "unknown error"));
+        sqlite3_free(errMsg);
     }
 }
 
 RowList Database::query(const std::string& name,
                          std::function<bool(const Row&)> predicate) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     loadTable(name);
     auto it = tables_.find(name);
     if (it == tables_.end()) return {};
@@ -88,6 +113,7 @@ RowList Database::query(const std::string& name,
 }
 
 void Database::insert(const std::string& name, const Row& row) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     loadTable(name);
     tables_[name].push_back(row);
     saveTable(name);
@@ -96,6 +122,7 @@ void Database::insert(const std::string& name, const Row& row) {
 void Database::update(const std::string& name,
                        std::function<bool(const Row&)> predicate,
                        std::function<void(Row&)> updater) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     loadTable(name);
     auto& rows = tables_[name];
     for (auto& row : rows) {
@@ -106,6 +133,7 @@ void Database::update(const std::string& name,
 
 void Database::remove(const std::string& name,
                        std::function<bool(const Row&)> predicate) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     loadTable(name);
     auto& rows = tables_[name];
     rows.erase(std::remove_if(rows.begin(), rows.end(),
@@ -115,43 +143,61 @@ void Database::remove(const std::string& name,
 }
 
 bool Database::loadTable(const std::string& name) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (tables_.find(name) != tables_.end()) return true;
 
-    std::string path = data_dir_ + "/" + name + ".json";
-    std::ifstream f(path);
-    if (!f.good()) return false;
-
-    std::stringstream buf;
-    buf << f.rdbuf();
-    std::string content = buf.str();
-    if (content.empty()) {
+    RowList rows;
+    sqlite3_stmt* stmt = nullptr;
+    std::string sql = "SELECT data FROM \"" + name + "\";";
+    if (sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         tables_[name] = {};
         return true;
     }
 
-    auto val = vendor::json::parse(content);
-    RowList rows;
-    if (val.is_array()) {
-        for (auto& item : val.arr) {
-            if (item.is_object()) rows.push_back(item.obj);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char* text = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (text && text[0] != '\0') {
+            auto val = vendor::json::parse(std::string(text));
+            if (val.is_object()) {
+                rows.push_back(std::move(val.obj));
+            }
         }
     }
+    sqlite3_finalize(stmt);
     tables_[name] = std::move(rows);
     return true;
 }
 
 void Database::saveTable(const std::string& name) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = tables_.find(name);
     if (it == tables_.end()) return;
 
-    vendor::json::Array arr;
-    for (const auto& row : it->second) {
-        arr.push_back(vendor::json::Value(row));
+    sqlite3_exec(db_, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    std::string delSql = "DELETE FROM \"" + name + "\";";
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db_, delSql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        ServerLogger::instance().error("Failed to clear table " + name + ": " +
+                                       (errMsg ? errMsg : "unknown error"));
+        sqlite3_free(errMsg);
+        sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+        return;
     }
 
-    std::string path = data_dir_ + "/" + name + ".json";
-    std::ofstream f(path, std::ios::trunc);
-    f << vendor::json::serialize(vendor::json::Value(arr));
+    sqlite3_stmt* stmt = nullptr;
+    std::string insSql = "INSERT INTO \"" + name + "\" (data) VALUES (?);";
+    if (sqlite3_prepare_v2(db_, insSql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        for (const auto& row : it->second) {
+            std::string json = vendor::json::serialize(vendor::json::Value(row));
+            sqlite3_bind_text(stmt, 1, json.c_str(), static_cast<int>(json.size()), SQLITE_TRANSIENT);
+            sqlite3_step(stmt);
+            sqlite3_reset(stmt);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, nullptr);
 }
 
 } // namespace lanchat::server::db

@@ -1,4 +1,6 @@
 ﻿import { useState } from 'react';
+import ClickSpark from '../lib/ClickSpark';
+import SpotlightCard from '../lib/SpotlightCard';
 
 interface RegisterPanelProps {
   onRegister: (nickname: string, password: string) => void;
@@ -41,76 +43,77 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-2xl bg-light-sidebar p-8 shadow-xl dark:bg-dark-sidebar"
-      >
-        <h1 className="mb-1 text-center text-2xl font-bold text-light-text dark:text-dark-text">
-          LanChat-Next
-        </h1>
-        <p className="mb-6 text-center text-xs text-light-muted dark:text-dark-muted">
-          Create a new account
-        </p>
+      <SpotlightCard className="w-full max-w-sm p-8 shadow-xl">
+        <form onSubmit={handleSubmit}>
+          <h1 className="mb-1 text-center text-2xl font-bold text-light-text dark:text-dark-text">
+            LanChat-Next
+          </h1>
+          <p className="mb-6 text-center text-xs text-light-muted dark:text-dark-muted">
+            Create a new account
+          </p>
 
-        {displayError && (
-          <div className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-center text-xs text-red-400">
-            {displayError}
-          </div>
-        )}
+          {displayError && (
+            <div className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-center text-xs text-red-400">
+              {displayError}
+            </div>
+          )}
 
-        <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-          Nickname
-        </label>
-        <input
-          type="text"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          placeholder="1-16 characters"
-          autoFocus
-          className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
-        />
+          <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
+            Nickname
+          </label>
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="1-16 characters"
+            autoFocus
+            className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
+          />
 
-        <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-          Password
-        </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="At least 6 characters"
-          className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
-        />
+          <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="At least 6 characters"
+            className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
+          />
 
-        <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-          Confirm password
-        </label>
-        <input
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          placeholder="Repeat password"
-          className="mb-6 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
-        />
+          <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
+            Confirm password
+          </label>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="Repeat password"
+            className="mb-6 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
+          />
 
-        <button
-          type="submit"
-          disabled={loading || !nickname || !password || !confirm}
-          className="w-full rounded-lg bg-dark-highlight px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#d63850] active:bg-[#c23045] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? 'Creating...' : 'Create account'}
-        </button>
+          <ClickSpark className="relative block w-full" sparkColor="#e94560" sparkCount={6}>
+            <button
+              type="submit"
+              disabled={loading || !nickname || !password || !confirm}
+              className="w-full rounded-lg bg-dark-highlight px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#d63850] active:bg-[#c23045] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? 'Creating...' : 'Create account'}
+            </button>
+          </ClickSpark>
 
-        <p className="mt-4 text-center text-xs text-light-muted dark:text-dark-muted">
-          Already have an account?{' '}
-          <button
-            type="button"
-            onClick={onSwitchToLogin}
-            className="font-medium text-dark-highlight hover:underline"
-          >
-            Back to sign in
-          </button>
-        </p>
-      </form>
+          <p className="mt-4 text-center text-xs text-light-muted dark:text-dark-muted">
+            Already have an account?{' '}
+            <button
+              type="button"
+              onClick={onSwitchToLogin}
+              className="font-medium text-dark-highlight hover:underline"
+            >
+              Back to sign in
+            </button>
+          </p>
+        </form>
+      </SpotlightCard>
     </div>
   );
 }

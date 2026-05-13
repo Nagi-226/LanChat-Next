@@ -1,20 +1,30 @@
 #pragma once
 
 #include "AsyncSession.h"
+#include "MessageRouter.h"
+#include "PresenceManager.h"
+#include "SessionPool.h"
 #include "mini_asio.hpp"
 
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 namespace lanchat::server {
 
-namespace db { class UserRepository; }
+namespace db {
+class ChannelRepository;
+class MessageRepository;
+class UserRepository;
+}
 
 class TcpServer {
 public:
-    explicit TcpServer(std::uint16_t port, db::UserRepository* users = nullptr);
+    TcpServer(std::uint16_t port,
+              db::UserRepository& users,
+              db::MessageRepository& messages,
+              db::ChannelRepository& channels,
+              std::size_t maxConnections = 500);
     ~TcpServer();
 
     TcpServer(const TcpServer&) = delete;
@@ -30,13 +40,18 @@ public:
 
 private:
     void startAccept();
-    std::string dispatchResponse(const std::string& request) const;
+    void startHeartbeatSweep();
+    void sweepHeartbeatTimeouts();
+    void markOfflineAndBroadcast(int userId);
 
     std::uint16_t port_;
     vendor::asio::io_context ctx_;
     std::unique_ptr<vendor::asio::ip::tcp::acceptor> acceptor_;
-    std::unordered_map<uint64_t, std::shared_ptr<AsyncSession>> sessions_;
-    db::UserRepository* users_ = nullptr;
+    std::unique_ptr<vendor::asio::steady_timer> heartbeat_timer_;
+    SessionPool sessions_;
+    PresenceManager presence_;
+    MessageRouter router_;
+    db::UserRepository& users_;
 };
 
 } // namespace lanchat::server

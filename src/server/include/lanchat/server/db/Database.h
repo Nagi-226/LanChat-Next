@@ -7,7 +7,10 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+struct sqlite3;
 
 namespace lanchat::server::db {
 
@@ -43,7 +46,7 @@ public:
     // Atomic read-modify-write
     template<typename F>
     auto withLock(F&& fn) -> decltype(fn()) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         return fn();
     }
 
@@ -54,9 +57,10 @@ private:
     void saveTable(const std::string& name) const;
 
     std::string data_dir_;
+    sqlite3* db_ = nullptr;
     // In-memory tables: table name -> list of row objects
     mutable std::unordered_map<std::string, RowList> tables_;
-    mutable std::mutex mutex_;
+    mutable std::recursive_mutex mutex_;
 };
 
 } // namespace lanchat::server::db

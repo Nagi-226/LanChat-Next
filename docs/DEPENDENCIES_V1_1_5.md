@@ -23,6 +23,16 @@ This file records the dependency decisions required by the v1.1.3 hardening step
 | TypeScript | 5.x | Active | Strict TS config. |
 | Zustand | 4.5.x | Active | UI state skeleton. |
 
+## UI Effects
+
+| Dependency | Source | Status | Notes |
+| --- | --- | --- | --- |
+| react-bits (BorderGlow) | `src/client/src/lib/BorderGlow.tsx` | Active | Mesh gradient border glow, used in ContactList. |
+| react-bits (ClickSpark) | `src/client/src/lib/ClickSpark.tsx` | Active | Click ripple spark effect, used in 5 components. |
+| react-bits (SpotlightCard) | `src/client/src/lib/SpotlightCard.tsx` | Active | Mouse-tracking radial gradient card, used in auth panels. |
+
+> react-bits components are copy-pasted from `E:\Open-Source Projects by others\react-bits\` (MIT + Commons Clause), not installed as npm dependency. See CLAUDE.md for full adoption plan.
+
 ## Build driver
 
 CMake requires one of `ninja`, `mingw32-make`, `nmake`, or another configured generator build tool on PATH. The v1.1.5 verification script auto-detects these tools and fails with a clear message if none is available.

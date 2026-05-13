@@ -11,9 +11,14 @@ export function Sidebar() {
       }`}
     >
       <div className="flex h-12 items-center justify-between border-b border-light-border px-4 dark:border-dark-border">
-        <span className="text-xs font-semibold text-light-muted dark:text-dark-muted">
-          AI Assistant
-        </span>
+        <div>
+          <span className="text-xs font-semibold text-light-muted dark:text-dark-muted">
+            AI Assistant
+          </span>
+          <p className="text-[10px] text-light-muted/80 dark:text-dark-muted/80">
+            Reserved for v1.7.0
+          </p>
+        </div>
         <button
           type="button"
           onClick={toggleAIPanel}
@@ -24,9 +29,9 @@ export function Sidebar() {
       </div>
 
       <div className="flex flex-1 items-center justify-center p-4">
-        <div className="text-center">
+        <div className="max-w-[180px] text-center">
           <p className="text-sm text-light-muted dark:text-dark-muted">
-            AI features are scheduled for v1.7.0
+            AI features are scheduled for v1.7.0.
           </p>
         </div>
       </div>

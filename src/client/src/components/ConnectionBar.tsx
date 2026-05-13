@@ -1,4 +1,5 @@
 import { useConnectionStore } from '../stores/connectionStore';
+import ClickSpark from '../lib/ClickSpark';
 
 export function ConnectionBar() {
   const status = useConnectionStore((s) => s.status);
@@ -6,6 +7,7 @@ export function ConnectionBar() {
   const port = useConnectionStore((s) => s.port);
   const error = useConnectionStore((s) => s.error);
   const lastHeartbeat = useConnectionStore((s) => s.lastHeartbeat);
+  const retryTimer = useConnectionStore((s) => s.retryTimer);
   const connect = useConnectionStore((s) => s.connect);
   const disconnect = useConnectionStore((s) => s.disconnect);
   const setHost = useConnectionStore((s) => s.setHost);
@@ -14,58 +16,63 @@ export function ConnectionBar() {
   const handleConnect = () => connect(host, port);
   const heartbeatAgo = lastHeartbeat ? Math.round((Date.now() - lastHeartbeat) / 1000) : null;
 
+  const statusClass =
+    status === 'connected'
+      ? 'text-green-500'
+      : status === 'connecting'
+        ? 'text-amber-400'
+        : 'text-light-muted dark:text-dark-muted';
+
   return (
-    <div className="flex items-center gap-3 text-xs">
+    <div className="flex flex-wrap items-center gap-3 text-xs">
       <input
         value={host}
         onChange={(e) => setHost(e.target.value)}
         placeholder="127.0.0.1"
-        className="w-24 px-2 py-1 rounded bg-light-sidebar dark:bg-dark-sidebar
-                   border border-light-border dark:border-dark-border
-                   text-light-text dark:text-dark-text outline-none"
+        className="w-28 rounded border border-light-border bg-light-sidebar px-2 py-1 text-light-text outline-none transition-colors focus:border-dark-highlight dark:border-dark-border dark:bg-dark-sidebar dark:text-dark-text"
       />
       <input
         type="number"
         value={port}
         onChange={(e) => setPort(Number(e.target.value))}
         placeholder="12346"
-        className="w-16 px-2 py-1 rounded bg-light-sidebar dark:bg-dark-sidebar
-                   border border-light-border dark:border-dark-border
-                   text-light-text dark:text-dark-text outline-none"
+        className="w-20 rounded border border-light-border bg-light-sidebar px-2 py-1 text-light-text outline-none transition-colors focus:border-dark-highlight dark:border-dark-border dark:bg-dark-sidebar dark:text-dark-text"
       />
 
       {status === 'disconnected' && (
-        <button
-          onClick={handleConnect}
-          className="px-3 py-1 rounded bg-light-accent dark:bg-dark-accent text-white
-                     hover:opacity-80 transition-opacity"
-        >
-          Connect
-        </button>
+        <ClickSpark sparkColor="#52c41a" sparkCount={6} sparkSize={5}>
+          <button
+            type="button"
+            onClick={handleConnect}
+            className="rounded bg-light-accent px-3 py-1 text-white transition-opacity hover:opacity-80 dark:bg-dark-accent"
+          >
+            Connect
+          </button>
+        </ClickSpark>
       )}
       {status === 'connecting' && (
-        <span className="text-light-muted dark:text-dark-muted">Connecting...</span>
+        <span className={statusClass}>
+          Connecting...{retryTimer ? ` retry in ${Math.ceil(retryTimer / 1000)}s` : ''}
+        </span>
       )}
       {status === 'connected' && (
         <>
-          <span className="text-green-500">Connected</span>
+          <span className={statusClass}>Connected</span>
           {heartbeatAgo !== null && (
             <span className="text-light-muted dark:text-dark-muted">
               heartbeat {heartbeatAgo}s ago
             </span>
           )}
           <button
+            type="button"
             onClick={disconnect}
-            className="px-3 py-1 rounded bg-dark-highlight text-white
-                       hover:opacity-80 transition-opacity"
+            className="rounded bg-dark-highlight px-3 py-1 text-white transition-opacity hover:opacity-80"
           >
             Disconnect
           </button>
         </>
       )}
-      {error && (
-        <span className="text-red-400">{error}</span>
-      )}
+      {error && <span className="max-w-[320px] truncate text-red-400">{error}</span>}
     </div>
   );
 }

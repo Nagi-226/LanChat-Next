@@ -1,14 +1,24 @@
 #include "lanchat/server/TcpServer.h"
 
 #include "lanchat/server/ServerLogger.h"
+#include "lanchat/server/db/ChannelRepository.h"
+#include "lanchat/server/db/MessageRepository.h"
 #include "lanchat/server/db/UserRepository.h"
 
+#include <chrono>
 #include <stdexcept>
 
 namespace lanchat::server {
 
-TcpServer::TcpServer(std::uint16_t port, db::UserRepository* users)
-    : port_(port), users_(users) {}
+TcpServer::TcpServer(std::uint16_t port,
+                     db::UserRepository& users,
+                     db::MessageRepository& messages,
+                     db::ChannelRepository& channels,
+                     std::size_t maxConnections)
+    : port_(port),
+      sessions_(maxConnections),
+      router_(sessions_, presence_, users, messages, channels),
+      users_(users) {}
 
 TcpServer::~TcpServer() {
     stop();
@@ -24,6 +34,7 @@ int TcpServer::run() {
             "listening on 0.0.0.0:" + std::to_string(port_));
 
         startAccept();
+        startHeartbeatSweep();
         ctx_.run();
 
         ServerLogger::instance().info("server stopped");
@@ -44,8 +55,13 @@ void TcpServer::startAccept() {
     acceptor_->async_accept(session->socket(),
         [this, session](vendor::asio::error_code ec) {
             if (!ec) {
+                if (!sessions_.add(session)) {
+                    ServerLogger::instance().error("max connections reached; rejecting session");
+                    session->close();
+                    startAccept();
+                    return;
+                }
                 session->start();
-                sessions_[session->id()] = session;
                 ServerLogger::instance().debug(
                     "accepted session " + std::to_string(session->id())
                     + ", total: " + std::to_string(sessions_.size()));
@@ -56,19 +72,24 @@ void TcpServer::startAccept() {
 
 void TcpServer::onMessage(std::shared_ptr<AsyncSession> session,
                           const std::string& json) {
-    session->deliver(dispatchResponse(json));
+    router_.route(session, json);
 }
 
 void TcpServer::removeSession(uint64_t sessionId) {
-    sessions_.erase(sessionId);
+    auto session = sessions_.findSession(sessionId);
+    const int userId = session ? session->userId() : 0;
+    sessions_.remove(sessionId);
+    if (userId > 0) {
+        markOfflineAndBroadcast(userId);
+    }
     ServerLogger::instance().debug(
         "session " + std::to_string(sessionId)
         + " removed, remaining: " + std::to_string(sessions_.size()));
 }
 
 void TcpServer::broadcast(const std::string& json, uint64_t excludeSessionId) {
-    for (auto& [id, session] : sessions_) {
-        if (id != excludeSessionId) {
+    for (const auto& session : sessions_.all()) {
+        if (session && session->id() != excludeSessionId) {
             session->deliver(json);
         }
     }
@@ -78,91 +99,43 @@ size_t TcpServer::connectionCount() const {
     return sessions_.size();
 }
 
-std::string TcpServer::dispatchResponse(const std::string& request) const {
-    // Heartbeat is handled by AsyncSession::onMessage (which also tracks
-    // heartbeat timestamps).  This check remains as a safety net for any
-    // future code path that calls dispatchResponse directly.
-    if (request.find("\"type\":20") != std::string::npos ||
-        request.find("\"type\": 20") != std::string::npos) {
-        return R"({"type":21,"status":"ok"})";
-    }
-
-    // Quick field extraction helpers
-    auto findInt = [&](const char* key) -> int {
-        std::string pat = std::string("\"") + key + "\":";
-        auto pos = request.find(pat);
-        if (pos == std::string::npos) return -1;
-        pos += pat.size();
-        while (pos < request.size() && (request[pos] == ' ' || request[pos] == '\t')) ++pos;
-        if (pos < request.size() && request[pos] == '"') return -1; // string, not int
-        int val = 0;
-        while (pos < request.size() && request[pos] >= '0' && request[pos] <= '9') {
-            val = val * 10 + (request[pos] - '0');
-            ++pos;
+void TcpServer::startHeartbeatSweep() {
+    heartbeat_timer_ = std::make_unique<vendor::asio::steady_timer>(ctx_);
+    heartbeat_timer_->expires_after(std::chrono::seconds(30));
+    heartbeat_timer_->async_wait([this](vendor::asio::error_code ec) {
+        if (!ec) {
+            sweepHeartbeatTimeouts();
+            startHeartbeatSweep();
         }
-        return val > 0 ? val : -1;
-    };
-    auto findStr = [&](const char* key) -> std::string {
-        std::string pat = std::string("\"") + key + "\":\"";
-        auto pos = request.find(pat);
-        if (pos == std::string::npos) return "";
-        pos += pat.size();
-        std::string val;
-        while (pos < request.size() && request[pos] != '"') {
-            val += request[pos++];
+    });
+}
+
+void TcpServer::sweepHeartbeatTimeouts() {
+    for (const auto& session : sessions_.timedOut()) {
+        if (!session) {
+            continue;
         }
-        return val;
-    };
-
-    // Register
-    if (request.find("\"type\":0") != std::string::npos ||
-        request.find("\"type\": 0") != std::string::npos) {
-        if (users_) {
-            std::string nickname = findStr("nickname");
-            std::string password = findStr("password");
-            if (nickname.empty()) nickname = findStr("name");
-            if (nickname.empty()) nickname = "user_" + std::to_string(std::time(nullptr));
-            if (password.empty()) password = "default";
-            int id = users_->create(password, nickname, 0);
-            if (id > 0) {
-                return R"({"type":1,"status":"ok","id":)" + std::to_string(id)
-                     + R"(,"msg":"registered"})";
-            }
-            return R"({"type":1,"status":"error","msg":"nickname taken or invalid"})";
-        }
-        return R"xx({"type":1,"status":"ok","id":1001,"msg":"registered (no db)"})xx";
+        ServerLogger::instance().info(
+            "session " + std::to_string(session->id()) + " heartbeat timed out");
+        const auto sessionId = session->id();
+        session->close();
+        removeSession(sessionId);
     }
+}
 
-    // Login
-    if (request.find("\"type\":2") != std::string::npos ||
-        request.find("\"type\": 2") != std::string::npos) {
-        if (users_) {
-            int uid = findInt("id");
-            std::string password = findStr("password");
-            if (uid > 0 && users_->verifyPassword(uid, password)) {
-                auto user = users_->findById(uid);
-                if (user.has_value()) {
-                    return R"({"type":3,"id":)" + std::to_string(uid)
-                         + R"(,"nickname":")" + user->nickname
-                         + R"(","headId":)" + std::to_string(user->avatar_id)
-                         + R"(,"friends":[],"groups":[]})";
-                }
-            }
-            return R"({"type":4,"status":"error","code":401,"msg":"invalid credentials"})";
-        }
-        return R"({"type":3,"id":1,"nickname":"Demo User","headId":0,"friends":[],"groups":[]})";
+void TcpServer::markOfflineAndBroadcast(int userId) {
+    presence_.setOffline(userId);
+    users_.setOnlineStatus(userId, false);
+    auto user = users_.findById(userId);
+    if (!user) {
+        return;
     }
-
-    // Send message (echo fallback)
-    if (request.find("\"type\":5") != std::string::npos ||
-        request.find("\"type\": 5") != std::string::npos) {
-        std::string msg = findStr("msg");
-        if (msg.empty()) msg = "echo";
-        return R"({"type":6,"fromId":0,"toId":0,"nickname":"server","headId":0,"msg":")"
-             + msg + R"(","content_type":"text"})";
-    }
-
-    return R"({"type":33,"status":"ok","msg":"server-next v1.2.0 received frame"})";
+    vendor::json::Object payload;
+    payload["type"] = vendor::json::Value(lanchat::protocol::toInt(
+        lanchat::protocol::MsgType::UserOffline));
+    payload["id"] = vendor::json::Value(userId);
+    payload["nickname"] = vendor::json::Value(user->nickname);
+    broadcast(vendor::json::serialize(vendor::json::Value(payload)));
 }
 
 } // namespace lanchat::server

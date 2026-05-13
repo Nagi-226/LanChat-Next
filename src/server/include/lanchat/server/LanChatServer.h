@@ -1,6 +1,8 @@
 #pragma once
 
 #include "db/Database.h"
+#include "db/ChannelRepository.h"
+#include "db/MessageRepository.h"
 #include "db/UserRepository.h"
 
 #include <cstdint>
@@ -17,11 +19,15 @@ public:
 
     db::Database& database() { return *database_; }
     db::UserRepository& users() { return *users_; }
+    db::MessageRepository& messages() { return *messages_; }
+    db::ChannelRepository& channels() { return *channels_; }
 
 private:
     std::uint16_t port_;
     std::unique_ptr<db::Database> database_;
     std::unique_ptr<db::UserRepository> users_;
+    std::unique_ptr<db::MessageRepository> messages_;
+    std::unique_ptr<db::ChannelRepository> channels_;
 };
 
 } // namespace lanchat::server
