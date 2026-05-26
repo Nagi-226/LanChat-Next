@@ -1,14 +1,15 @@
 #include "lanchat/server/AsyncSession.h"
 #include "lanchat/server/FrameCodec.h"
+#include "lanchat/server/ProtocolJson.h"
 #include "lanchat/server/ServerLogger.h"
 #include "lanchat/server/TcpServer.h"
 
 namespace lanchat::server {
 
-uint64_t AsyncSession::next_id_ = 1;
+std::atomic<uint64_t> AsyncSession::next_id_{1};
 
 AsyncSession::AsyncSession(vendor::asio::io_context& ctx, TcpServer& server)
-    : ctx_(ctx), server_(server), socket_(ctx), id_(next_id_++) {
+    : ctx_(ctx), server_(server), socket_(ctx), id_(next_id_.fetch_add(1, std::memory_order_relaxed)) {
     last_heartbeat_ = std::chrono::steady_clock::now();
 }
 
@@ -92,11 +93,11 @@ void AsyncSession::doWrite() {
 }
 
 void AsyncSession::onMessage(const std::string& json) {
-    // Check for heartbeat
-    if (json.find("\"type\":20") != std::string::npos ||
-        json.find("\"type\": 20") != std::string::npos) {
+    bool ok = false;
+    const auto request = protocol_json::parseObject(json, ok);
+    if (ok && protocol_json::typeField(request) == lanchat::protocol::MsgType::Heartbeat) {
         heartbeatReceived();
-        deliver(R"({"type":21,"status":"ok"})");
+        deliver(protocol_json::ok(lanchat::protocol::MsgType::HeartbeatAck));
         return;
     }
     // Forward to server for dispatch

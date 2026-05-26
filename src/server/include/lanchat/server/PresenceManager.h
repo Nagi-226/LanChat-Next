@@ -8,7 +8,7 @@ namespace lanchat::server {
 
 class PresenceManager {
 public:
-    void setOnline(int userId, const std::string& status = "ok");
+    void setOnline(int userId, const std::string& status = "online");
     void setOffline(int userId);
     bool isOnline(int userId) const;
     std::string status(int userId) const;

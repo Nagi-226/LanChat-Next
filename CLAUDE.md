@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Last updated: 2026-05-13
+> Last updated: 2026-05-26
 
 ## Project Identity
 
@@ -180,27 +180,28 @@ Animation components are copied from `E:\Open-Source Projects by others\react-bi
 |-----------|------|---------|
 | `ClickSpark` | `lib/ClickSpark.tsx` | ChatArea, GroupChatArea, LoginPanel, RegisterPanel, ConnectionBar (send/connect buttons) |
 | `SpotlightCard` | `lib/SpotlightCard.tsx` | LoginPanel, RegisterPanel (form card hover effect) |
-| `BorderGlow` | `lib/BorderGlow.tsx` | ContactList (active contact highlight) |
+| `BorderGlow` | `lib/BorderGlow.tsx` | ContactList (active contact/group highlight) |
 
-### Phase 2 (planned — v1.4.0) — Text + Counter
-Requires `npm install gsap framer-motion`. Components: TextType, Counter, GradientText, ShinyText.
+### Phase 2 (completed — v1.4.6) — Text + Counter + UI polish
+gsap + framer-motion installed. Components delivered across 7 sub-versions: TextType (login/register titles), Counter (online/unread counts), GradientText (app name + splash), ShinyText (status labels), plus micro-interactions, skeleton screens, and reduced-motion support. See CODEX.md v1.4.0–v1.4.6 for details.
 
-### Phase 3 (planned — v1.5.0) — List + Scroll
-Components: AnimatedList, FadeContent, AnimatedContent. Uses GSAP ScrollTrigger (included in gsap package).
+### Phase 3 (completed — v1.5.0) — List + Scroll
+AnimatedList/AnimatedListItem (framer-motion useInView, ChatArea + GroupChatArea message entry), FadeContent (GSAP ScrollTrigger, ContactList fade-in), AnimatedContent (GSAP ScrollTrigger, App.tsx horizontal transition between chat views). No new npm deps.
 
-### Phase 4 (planned — v1.6.0) — Polish
-No new components. Fine-tune animation params, add AnimatePresence to message bubbles.
+### Phase 4 (completed — v1.6.0) — Polish
+6 sub-versions, no new components, no new deps. v1.5.1 (AnimatePresence bubble exit + ContactList exit), v1.5.2 (animation param unification — durations/easing/scale), v1.5.3 (smart scroll + "New messages" button + ContactList scroll position), v1.5.4 (loading→content crossfade transitions), v1.5.5 (dead code + duplicate DateDivider extraction + export audit), v1.5.6 (pre-v1.6.0 quality gate: reduced-motion, theme consistency, a11y, profiler, bundle size, Tauri desktop). See CODEX.md for per-version task breakdown.
 
 ### Excluded from Integration
 All `Backgrounds/*` (full-page WebGL/Canvas, inappropriate for chat window). All `@react-three/*` components (Three.js adds ~500KB). `FluidGlass`, `Lanyard`, `ModelViewer` (3D models, irrelevant to chat).
 
 ## Current Version State
 
-- **Latest checkpoint**: v1.2.5 — accelerated server-core smoke target
-- **Server**: TcpServer + AsyncSession (stabilized), Database + UserRepository + LegacyMigrator, SessionPool, PresenceManager, MessageRouter, MessageRepository, and ChannelRepository are wired for smoke-level routing/persistence.
-- **Client**: Full component set + stores wired to Tauri. Phase 1 React Bits animation integrated.
-- **Still deferred after v1.2.5**: real asio (mini-asio still vendored), real spdlog, production bcrypt-compatible hashing, durable SQLite repository SQL, heartbeat timeout sweep, longer load soak, and interactive Tauri desktop E2E.
-- **Pending desktop test**: `npm run tauri dev` end-to-end (login → connect → send → receive → theme toggle)
+- **Latest checkpoint**: v1.6.0 — React Bits Phase 1–4 animation integration complete. 2026-05-26 full-stack audit completed: 3 P0 + 4 P1 + 3 P2 issues found and fixed.
+- **Next**: v1.6.1–v1.6.5 → v1.7.0 (AI Assistant Panel + Friend System). See CODEX.md for per-version breakdown.
+- **Server**: TcpServer + AsyncSession (stabilized), Database + UserRepository + LegacyMigrator, SessionPool, PresenceManager, MessageRouter, MessageRepository, and ChannelRepository are wired for smoke-level routing/persistence. v1.6.3 scheduled for server hardening pass.
+- **Client**: Phase 1–4 React Bits complete. v1.6.1–v1.6.5 scheduled for DRY refactor, connection hardening, UI edge cases, and quality gate before v1.7.0.
+- **Audit tooling**: `codebase-health-audit` skill at `.claude/skills/codebase-health-audit/SKILL.md` for reusable multi-dimensional quality checks.
+- **Still deferred after v1.2.5**: real asio (mini-asio still vendored), real spdlog, production bcrypt-compatible hashing, durable SQLite repository SQL, heartbeat timeout sweep, longer load soak.
 
 ## Key Constraints
 

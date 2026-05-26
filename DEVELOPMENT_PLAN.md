@@ -1926,3 +1926,18 @@ See `docs/CLAUDE_CODE_SYNC.md` for the cross-agent handoff decision.
 - Accepted deviations: legacy `QJsonDocument` is acceptable; `nlohmann/json` belongs in the new asio server. Python smoke test is acceptable for legacy protocol validation.
 - v1.1.0 actual state: blueprint skeleton is already created under `src/server`, `src/client`, and `protocol/schemas`.
 - Next milestone: v1.1.3 dependency/build hardening and replacement of the temporary WinSock/POSIX fallback with standalone asio async networking.
+
+---
+
+## v1.6.0 Phase 4 Completion Update (2026-05-26)
+
+v1.5.6 质量门已合并进 v1.6.0：客户端 React Bits Phase 1-4 动画集成完成，UI 目标继续保持 Discord-style 三栏聊天工作台（左会话/中聊天/右 AI 面板）。
+
+- [x] 消息气泡和联系人/群组列表具备 enter/exit 动画，不再硬切消失。
+- [x] 动画参数统一：消息退出 0.12s easeIn、Toast 0.2s、登录/注册按钮 scale 统一 1.05/0.95、TextType 统一 40ms。
+- [x] 智能滚动完成：用户离底部超过 80px 时不强制滚动，显示 `New messages` 浮动按钮。
+- [x] loading/empty/content 三态 crossfade 完成，Splash 退出后主界面淡入。
+- [x] `DateDivider` 提取到共享工具，`ButtonSpinner` 返回类型精确为 `JSX.Element`。
+- [x] v1.6.0 质量门通过：`npx tsc --noEmit`、`npm run build`、`cargo check`、`npm run tauri:dev` 启动日志、localhost 1420 HTTP smoke、`git diff --check -- src/client/src`。
+
+v1.6.0 后，下一阶段转入 v2.0.0 服务端加固轨道。

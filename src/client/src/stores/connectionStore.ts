@@ -1,8 +1,13 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+
+export interface RecentServer {
+  host: string;
+  port: number;
+}
 
 interface ConnectionState {
   status: ConnectionStatus;
@@ -12,8 +17,12 @@ interface ConnectionState {
   lastHeartbeat: number | null;
   retryCount: number;
   retryTimer: number | null;
+  retryDueAt: number | null;
+  recentServers: RecentServer[];
   setHost: (host: string) => void;
   setPort: (port: number) => void;
+  selectServer: (server: RecentServer) => void;
+  dismissError: () => void;
   setDisconnected: () => void;
   connect: (host: string, port: number) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -25,6 +34,11 @@ interface ConnectionState {
 
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
+function rememberServer(servers: RecentServer[], server: RecentServer): RecentServer[] {
+  const deduped = servers.filter((item) => item.host !== server.host || item.port !== server.port);
+  return [server, ...deduped].slice(0, 5);
+}
+
 export const useConnectionStore = create<ConnectionState>()(
   persist(
     (set, get) => ({
@@ -35,9 +49,13 @@ export const useConnectionStore = create<ConnectionState>()(
       lastHeartbeat: null,
       retryCount: 0,
       retryTimer: null,
+      retryDueAt: null,
+      recentServers: [],
 
       setHost: (host) => set({ host, error: null }),
       setPort: (port) => set({ port, error: null }),
+      selectServer: (server) => set({ host: server.host, port: server.port, error: null }),
+      dismissError: () => set({ error: null }),
       setDisconnected: () => set({ status: 'disconnected', lastHeartbeat: null, retryCount: 0 }),
 
       connect: async (host, port) => {
@@ -45,7 +63,13 @@ export const useConnectionStore = create<ConnectionState>()(
         set({ status: 'connecting', error: null, host, port });
         try {
           await invoke('connect', { host, port });
-          set({ status: 'connected', error: null, lastHeartbeat: Date.now(), retryCount: 0 });
+          set((s) => ({
+            status: 'connected',
+            error: null,
+            lastHeartbeat: Date.now(),
+            retryCount: 0,
+            recentServers: rememberServer(s.recentServers, { host, port }),
+          }));
         } catch (e) {
           set({ status: 'disconnected', error: String(e), lastHeartbeat: null });
           get().scheduleReconnect();
@@ -76,7 +100,7 @@ export const useConnectionStore = create<ConnectionState>()(
         if (status === 'connected' || reconnectTimer) return;
 
         const delay = Math.min(1000 * 2 ** retryCount, 30000);
-        set({ retryTimer: delay, retryCount: retryCount + 1, status: 'connecting' });
+        set({ retryTimer: delay, retryDueAt: Date.now() + delay, retryCount: retryCount + 1, status: 'connecting' });
 
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
@@ -89,12 +113,16 @@ export const useConnectionStore = create<ConnectionState>()(
           clearTimeout(reconnectTimer);
           reconnectTimer = null;
         }
-        set({ retryTimer: null });
+        set({ retryTimer: null, retryDueAt: null });
       },
     }),
     {
       name: 'lanchat-connection',
-      partialize: (state) => ({ host: state.host, port: state.port }),
+      partialize: (state) => ({
+        host: state.host,
+        port: state.port,
+        recentServers: state.recentServers,
+      }),
     },
   ),
 );

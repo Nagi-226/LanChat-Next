@@ -390,7 +390,7 @@ void MessageRouter::broadcastPresence(MsgType type, int userId) {
     if (!user) {
         return;
     }
-    Object payload = userToJson(*user, type == MsgType::UserOnline ? "ok" : "offline");
+    Object payload = userToJson(*user, type == MsgType::UserOnline ? "online" : "offline");
     payload["type"] = Value(lanchat::protocol::toInt(type));
     auto json = protocol_json::serialize(payload);
     for (const auto& session : sessions_.all()) {
@@ -404,10 +404,12 @@ int MessageRouter::authenticatedUserId(
     const std::shared_ptr<AsyncSession>& session,
     const Object& request,
     const std::string& field) const {
+    (void)request;
+    (void)field;
     if (session && session->authenticated()) {
         return session->userId();
     }
-    return protocol_json::intField(request, field);
+    return 0;
 }
 
 } // namespace lanchat::server

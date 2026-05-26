@@ -1,6 +1,9 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
 import ClickSpark from '../lib/ClickSpark';
 import SpotlightCard from '../lib/SpotlightCard';
+import TextType from '../lib/TextType';
+import { ButtonSpinner } from '../lib/utils';
 
 interface RegisterPanelProps {
   onRegister: (nickname: string, password: string) => void;
@@ -46,10 +49,10 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
       <SpotlightCard className="w-full max-w-sm p-8 shadow-xl">
         <form onSubmit={handleSubmit}>
           <h1 className="mb-1 text-center text-2xl font-bold text-light-text dark:text-dark-text">
-            LanChat-Next
+            <TextType text="Create account" loop={false} typingSpeed={40} />
           </h1>
           <p className="mb-6 text-center text-xs text-light-muted dark:text-dark-muted">
-            Create a new account
+            Join the local workspace
           </p>
 
           {displayError && (
@@ -93,13 +96,17 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
           />
 
           <ClickSpark className="relative block w-full" sparkColor="#e94560" sparkCount={6}>
-            <button
+            <motion.button
               type="submit"
               disabled={loading || !nickname || !password || !confirm}
-              className="w-full rounded-lg bg-dark-highlight px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#d63850] active:bg-[#c23045] disabled:cursor-not-allowed disabled:opacity-50"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              animate={{ opacity: loading ? 0.82 : 1 }}
+              className="flex w-full items-center justify-center rounded-lg bg-dark-highlight px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#d63850] active:bg-[#c23045] disabled:cursor-not-allowed disabled:opacity-50"
             >
+              {loading && <ButtonSpinner />}
               {loading ? 'Creating...' : 'Create account'}
-            </button>
+            </motion.button>
           </ClickSpark>
 
           <p className="mt-4 text-center text-xs text-light-muted dark:text-dark-muted">

@@ -12,8 +12,6 @@ LAN ChatRoom is a TCP-based local network instant messaging application. It supp
 |-----------|--------------|-------------|
 | `original-client/` | HHClient | Qt 5.4 GUI client — login, register, friend list, private/group chat |
 | `original-server/` | HHServer | Qt 5.4 TCP server — connection management, message routing, SQLite users |
-| `qq-chat-prototype/` | QQChat | QQ-style chat UI prototype |
-| `chat-demo-with-group-and-unread/` | 聊天demo | Group chat demo with unread message badges |
 
 ## Architecture
 

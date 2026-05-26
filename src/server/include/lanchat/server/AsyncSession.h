@@ -2,6 +2,7 @@
 
 #include "mini_asio.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -55,7 +56,7 @@ private:
     std::chrono::steady_clock::time_point last_heartbeat_;
     int missed_heartbeats_ = 0;
 
-    static uint64_t next_id_;
+    static std::atomic<uint64_t> next_id_;
 };
 
 } // namespace lanchat::server

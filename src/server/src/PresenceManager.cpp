@@ -4,7 +4,7 @@ namespace lanchat::server {
 
 void PresenceManager::setOnline(int userId, const std::string& status) {
     if (userId > 0) {
-        presence_[userId] = status.empty() ? "ok" : status;
+        presence_[userId] = status.empty() ? "online" : status;
     }
 }
 
