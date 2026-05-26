@@ -11,11 +11,11 @@
 
 <p align="center">
   <a href="https://github.com/Nagi-226/LanChat-Next/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-v1.1.0-blueviolet" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v1.6.0-blueviolet" alt="Version"></a>
   <a href="#"><img src="https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B" alt="C++17"></a>
   <a href="#"><img src="https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri" alt="Tauri"></a>
   <a href="#"><img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React 18"></a>
-  <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript" alt="TypeScript"></a>
+  <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript" alt="TypeScript"></a>
   <a href="#"><img src="https://img.shields.io/badge/platform-Windows%2011-0078D6?logo=windows" alt="Windows 11"></a>
   <a href="#"><img src="https://img.shields.io/badge/status-active%20development-success" alt="Status"></a>
 </p>
@@ -24,9 +24,9 @@
 
 ## What is LanChat-Next?
 
-A complete rewrite of a graduation project LAN chat application, rebuilt from the ground up with modern technology and AI-assisted development. Designed for **small-to-medium enterprises (≤ 500 users)** — deploy on a single LAN server, no cloud dependency, no registration required beyond the local network.
+A complete rewrite of a graduation project LAN chat application, rebuilt from the ground up with modern technology and AI-assisted development. Designed for **small-to-medium enterprises (≤ 500 users)** — deploy on a single LAN server, no cloud dependency.
 
-> **Vision**: Discord-level UI polish, Telegram-level simplicity, enterprise LAN reliability.  
+> **Vision**: Discord-level UI polish, Telegram-level simplicity, enterprise LAN reliability.
 > **Endgame (v2.0.0)**: Zero Qt dependencies. Pure C++17 server + Tauri/React desktop client.
 
 ---
@@ -39,26 +39,25 @@ A complete rewrite of a graduation project LAN chat application, rebuilt from th
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │  React 18 / TypeScript UI                             │   │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │   │
-│  │  │ Login    │ │ ChatView │ │ Friends  │ │ AI Panel│  │   │
+│  │  │ Login    │ │ ChatArea │ │ Contacts │ │ Sidebar │  │   │
 │  │  └──────────┘ └──────────┘ └──────────┘ └─────────┘  │   │
 │  └──────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │  Tauri Rust Bridge: TCP Manager · Frame Codec ·      │   │
-│  │  Notifications · File System                         │   │
+│  │  Notifications                                        │   │
 │  └──────────────────────────────────────────────────────┘   │
 └──────────────────────┬───────────────────────────────────────┘
-                       │  TCP + JSON (length-prefixed frames)
+                       │  TCP + JSON (4-byte BE length-prefixed frames)
                        │  Port 12346
 ┌──────────────────────┴───────────────────────────────────────┐
-│  LanChat-Next Server (C++17 + asio)                          │
+│  LanChat-Next Server (C++17)                                 │
 │  ┌────────────┐ ┌──────────────┐ ┌──────────────────────┐   │
-│  │ Connection │ │ Message      │ │ AI Scheduler         │   │
-│  │ Pool (500) │ │ Router       │ │ · Summarize          │   │
-│  │ · Heartbeat│ │ · P2P/Group  │ │ · Translate          │   │
-│  │ · Timeout  │ │ · Offline Q  │ │ · Semantic Search    │   │
+│  │ TcpServer  │ │ MessageRouter│ │ PresenceManager      │   │
+│  │ · Accept   │ │ · P2P/Group  │ │ · Online/Offline     │   │
+│  │ · Heartbeat│ │ · Offline Q  │ │ · Status broadcast   │   │
 │  └────────────┘ └──────────────┘ └──────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │  Data Layer: SQLiteCpp (WAL) · FTS5 · Embeddings    │   │
+│  │  Data Layer: SQLite (WAL) · User/Message/Channel     │   │
 │  └──────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -67,15 +66,19 @@ A complete rewrite of a graduation project LAN chat application, rebuilt from th
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Server** | C++17 · asio · nlohmann/json · SQLiteCpp · bcrypt · spdlog | High-performance async message routing |
-| **Client UI** | React 18 · TypeScript 5.5 · Tailwind CSS 3.4 · Zustand · Framer Motion | Modern responsive desktop UI |
-| **Desktop Shell** | Tauri v2 · Rust · Tokio | Native window, notifications, file system |
-| **Protocol** | TCP · JSON · 4-byte BE length-prefixed frames | 34 message types, typed schemas |
-| **Database** | SQLite 3 (WAL mode) · FTS5 | User/Message/Channel/Embedding persistence |
-| **AI** | DeepSeek-V4-Pro · Ollama (local fallback) · text-embedding-3-small | Chat summary, semantic search, translation |
-| **Build** | CMake 3.28 · Vite 5 · Cargo | Cross-platform build orchestration |
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| **Server** | C++17 · CMake 3.28 | MSVC generator on Windows |
+| **Server Net** | mini-asio (vendored) | To be replaced with real asio |
+| **Server JSON** | mini-json (vendored) | nlohmann/json wrapper |
+| **Server DB** | SQLite + vendored wrapper | WAL mode |
+| **Server Log** | mini-spdlog (vendored) | |
+| **Server Hash** | sha256 (vendored) | bcrypt planned |
+| **Client UI** | React 18 · TypeScript (strict) · Tailwind CSS 3.4 | Vite 5, class-based dark mode |
+| **Client State** | Zustand 4.5 | `persist` on uiStore only |
+| **Client Anim** | Framer Motion + GSAP | 11 lib components (React Bits) |
+| **Desktop** | Tauri v2 · Rust · Tokio | Native window, notifications |
+| **Protocol** | TCP · JSON · 4-byte BE length-prefixed frames | 34 message types, JSON Schema |
 
 ---
 
@@ -98,19 +101,24 @@ git clone https://github.com/Nagi-226/LanChat-Next.git
 cd LanChat-Next
 
 # 2. Build server
-cmake -S . -B build/server-next
-cmake --build build/server-next --config Release
+cmake -S . -B build/server-next-vs
+cmake --build build/server-next-vs --config Debug
 
 # 3. Start server (port 12346)
-./build/server-next/Release/lanchat_server_next
+./build/server-next-vs/Debug/lanchat_server_next.exe
 
-# 4. Build client (separate terminal)
+# 4. Seed a test user (optional)
+./build/server-next-vs/Debug/lanchat_server_next.exe --migrate scripts/seed_users.json
+
+# 5. Build & run client (separate terminal)
 cd src/client
 npm install
-npm run tauri dev
+npm run tauri dev        # Desktop app
+# or
+npm run dev              # Browser dev server (port 1420)
 ```
 
-> **Legacy Qt version**: The original Qt 5.4 graduation project is archived under `legacy/`. Run `build_legacy.bat` in a Qt 5.15 Developer Prompt if you want to see the original UI. Not required for development.
+> **Legacy Qt version**: The original Qt 5.4 graduation project is archived under `legacy/`. Not required for development.
 
 ---
 
@@ -119,18 +127,52 @@ npm run tauri dev
 | Version | Name | Key Deliverables | Status |
 |---------|------|-----------------|--------|
 | v1.0.5 | Legacy Seal | Frame protocol, channel persistence, offline messages, password hashing | ✅ Done |
-| **v1.1.0** | **Blueprint** | **New C++ server + Tauri/React client skeleton · 34 protocol schemas** | ✅ **Current** |
-| v1.2.0 | Server Core | Full asio async, FTS5 search, GTest coverage, WAL optimization | ⬜ Next |
-| v1.3.0 | Client Base | Login/Register UI, Tauri window polish, clipboard support | ⬜ |
-| v1.4.0 | Chat Core | Real-time messaging, virtual scrolling, file/image preview | ⬜ |
-| v1.5.0 | Social | Friend list, channels, online presence, @mentions | ⬜ |
-| v1.6.0 | UI Polish | Discord-inspired themes, animations, responsive layout | ⬜ |
-| v1.7.0 | AI Agent | Chat summary, semantic search, translation, AI bot | ⬜ |
-| v1.8.0 | Advanced | File transfer, admin panel, message read receipts | ⬜ |
-| v1.9.0 | Hardening | Stress testing, CI/CD, security audit, installer packaging | ⬜ |
-| **v2.0.0** | **Release** | **Zero Qt · Production-ready · .msi installer** | 🎯 |
+| v1.1.0 | Blueprint | C++ server + Tauri/React skeleton, 34 protocol schemas | ✅ Done |
+| v1.2.0–v1.2.5 | Server Core | SQLite migration, message routing, session pool, presence, unit tests | ✅ Done |
+| v1.3.0–v1.3.6 | Client Base | Login/Register, chat UX, contact search/sort, group chat wiring, error handling | ✅ Done |
+| v1.4.0–v1.4.6 | Anim Phase 1–2 | 7 lib components, UI transitions, toast animations, micro-interactions, skeleton screens | ✅ Done |
+| v1.5.0–v1.5.6 | Anim Phase 3–4 | Scroll-triggered animations, AnimatePresence exits, smart scroll, quality gate | ✅ Done |
+| **v1.6.0** | **Animation Complete** | **React Bits Phase 1–4 full integration, full-stack audit, skill tooling** | ✅ **Current** |
+| v1.6.1 | DRY Refactor | ChatArea/GroupChatArea shared hooks & components | ⬜ Next |
+| v1.6.2 | Connection Hardening | Store-level reconnect timer, max retry limit | ⬜ |
+| v1.6.3 | Server Hardening | Rate limiting, frame validation, port validation | ⬜ |
+| v1.6.4 | UI Edge Cases | Loading/empty/error/disconnected state coverage | ⬜ |
+| v1.6.5 | Quality Gate | Pre-v1.7.0 full audit pass | ⬜ |
+| v1.7.0 | AI + Friends | AI sidebar panel, friend request/accept system | ⬜ |
+| v2.0.0 | Release | Zero Qt, real asio/spdlog/bcrypt, .msi installer | 🎯 |
 
-> Full plan: [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md)
+> Full plan: [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) | Client guide: [`CODEX.md`](CODEX.md) | Server guide: [`CLAUDE.md`](CLAUDE.md)
+
+---
+
+## Current Feature Set (v1.6.0)
+
+### Working End-to-End
+- User registration & login (sha256 password hashing)
+- Private messaging (real-time, optimistic send, delivery status)
+- Group chat (create, join, leave, member list, @mentions)
+- Online/offline presence (real-time broadcast)
+- Offline message delivery (queued on server, delivered on login)
+- Heartbeat keep-alive with timeout sweep
+- Auto-login with saved credentials (localStorage)
+- Dark/Light theme toggle (persisted)
+- Contact list with search, sort (online-first), unread badges
+- Recent server address memory (last 5)
+
+### UI/UX Polish
+- 11 animation components (ClickSpark, SpotlightCard, BorderGlow, TextType, Counter, GradientText, ShinyText, AnimatedList, AnimatedContent, FadeContent, Toast)
+- Smart scroll (won't yank you to bottom when reading history)
+- "New messages" floating button with unread count
+- Skeleton screens (contacts, messages)
+- AnimatePresence transitions (sidebar, AI panel, message list, toast)
+- `prefers-reduced-motion` support
+- Focus-visible accessibility styling
+
+### Developer Tooling
+- `codebase-health-audit` skill (6-pillar multi-dimensional audit framework)
+- Protocol schema generation & audit scripts (34 message types)
+- Multi-client TCP smoke tests
+- Full verification pipeline (tsc + Vite + Cargo + CMake + CTest)
 
 ---
 
@@ -139,25 +181,40 @@ npm run tauri dev
 ```
 LanChat-Next/
 ├── src/
-│   ├── server/              # C++17 asio server (new)
+│   ├── server/                  # C++17 server
 │   │   ├── CMakeLists.txt
-│   │   ├── src/             # FrameCodec, TcpServer, LanChatServer
-│   │   └── include/         # Public headers (lanchat::server)
-│   └── client/              # Tauri v2 + React client (new)
-│       ├── src/             # React UI (App, stores, lib)
-│       └── src-tauri/       # Rust backend (TCP, commands)
-├── protocol/                # Shared protocol truth source
-│   ├── message_types.h      # C++ enum (34 types)
-│   ├── message_types.ts     # TypeScript enum (aligned)
-│   └── schemas/             # 34 JSON Schema files
-├── legacy/                  # Original Qt 5.4 project (reference)
-│   ├── original-client/     # Qt client (archived)
-│   ├── original-server/     # Qt server (archived)
-│   └── legacy-common/       # Shared frame protocol & logging
-├── docs/                    # Design docs, API reference, checkpoints
-├── tests/                   # Test scripts
-├── CMakeLists.txt           # Root build entry
-└── DEVELOPMENT_PLAN.md      # Full development plan (authoritative)
+│   │   ├── src/                 # TcpServer, AsyncSession, LanChatServer,
+│   │   │   │                    #   MessageRouter, PresenceManager, SessionPool,
+│   │   │   │                    #   FrameCodec, ServerLogger, main
+│   │   │   └── db/              # Database, UserRepository, MessageRepository,
+│   │   │                        #   ChannelRepository, LegacyMigrator
+│   │   ├── include/             # Public headers (lanchat::server)
+│   │   ├── config/              # Server config files
+│   │   └── vendor/              # mini-asio, mini-json, mini-spdlog, sha256, sqlite
+│   └── client/                  # Tauri v2 + React client
+│       ├── src/                 # React UI
+│       │   ├── components/      # App, ChatArea, GroupChatArea, ContactList,
+│       │   │                    #   LoginPanel, RegisterPanel, ConnectionBar, Sidebar
+│       │   ├── stores/          # chatStore, connectionStore, uiStore (Zustand)
+│       │   ├── lib/             # 11 animation components + shared utils
+│       │   └── styles/          # global.css
+│       └── src-tauri/           # Rust backend
+│           └── src/             # main, lib, commands, tcp_manager, message_codec,
+│                                #   notifications
+├── protocol/                    # Shared protocol truth source
+│   ├── protocol_definitions.json  # 34 message types (source of truth)
+│   ├── message_types.h          # C++ enum
+│   ├── message_types.ts         # TypeScript const object
+│   └── schemas/                 # 34 JSON Schema files
+├── legacy/                      # Original Qt 5.4 project (read-only archive)
+├── docs/                        # Design docs, research, checkpoints
+├── scripts/                     # Build/verify automation, launch scripts
+├── tests/                       # Integration & smoke tests
+├── .claude/skills/              # Reusable AI agent skills
+├── CMakeLists.txt               # Root build entry
+├── CLAUDE.md                    # Server development guide
+├── CODEX.md                     # Client development guide
+└── DEVELOPMENT_PLAN.md          # Full development plan
 ```
 
 ---
@@ -168,15 +225,40 @@ LanChat-Next/
 
 This project is developed with a multi-AI-agent architecture:
 
-| Agent | Model | Primary Role |
-|-------|-------|-------------|
-| **Claude Code** | DeepSeek-V4-Pro | Architecture design, C++ server, code review, documentation |
-| **Codex** | GPT-5.5 | Code generation, React/TypeScript, Rust bridge, testing |
-| **Gemini 3.1 Pro** | (via Cursor) | UI beautification, CSS/Tailwind theming |
+| Agent | Primary Role |
+|-------|-------------|
+| **Claude Code** (DeepSeek-V4-Pro) | Architecture design, C++ server, code review, documentation |
+| **Codex** (GPT-5.5) | Code generation, React/TypeScript, Rust bridge, testing |
 
 ### Quality Gates
 
-Every milestone follows a `.0 → .3 → .4 → .5` progression with mandatory checkpoints before advancing. See [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) for the full iteration rules and acceptance criteria.
+Every milestone follows a `.0 → .5 → .0` progression with mandatory checkpoints:
+- `.0` — feature delivery
+- `.1–.4` — polish iterations
+- `.5` — quality gate (full audit, build verification, type check)
+
+See [`CODEX.md`](CODEX.md) for client conventions and [`CLAUDE.md`](CLAUDE.md) for server architecture.
+
+### Build Verification
+
+```powershell
+# Client type-check
+cd src/client && npx tsc --noEmit
+
+# Client production build
+cd src/client && npm run build
+
+# Rust bridge check
+cd src/client && cargo check
+
+# Server build + test
+cmake -S . -B build/server-next-vs
+cmake --build build/server-next-vs --config Debug
+ctest -C Debug --test-dir build/server-next-vs
+
+# Protocol audit
+node scripts/audit_protocol.mjs
+```
 
 ---
 
