@@ -53,9 +53,24 @@ void assertInvalidLengthReturnsError()
 {
     std::vector<std::uint8_t> frame{0, 0, 0, 0};
     std::string decoded;
-    assert(FrameCodec::tryDecode(frame, decoded));
-    assert(decoded.find("invalid frame") != std::string::npos);
+    assert(!FrameCodec::tryDecode(frame, decoded));
+    assert(decoded.empty());
     assert(frame.empty());
+}
+
+void assertFrameSizeLimitIs256KiB()
+{
+    const std::string ok(256 * 1024, 'x');
+    const std::string tooLarge(256 * 1024 + 1, 'x');
+    assert(FrameCodec::encode(ok).size() == ok.size() + 4);
+
+    bool threw = false;
+    try {
+        (void)FrameCodec::encode(tooLarge);
+    } catch (...) {
+        threw = true;
+    }
+    assert(threw);
 }
 } // namespace
 
@@ -65,6 +80,7 @@ int main()
     assertPartialFrameWaits();
     assertStickyFramesDecodeInOrder();
     assertInvalidLengthReturnsError();
+    assertFrameSizeLimitIs256KiB();
     std::cout << "FrameCodec tests passed\n";
     return 0;
 }

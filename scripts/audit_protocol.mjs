@@ -52,8 +52,8 @@ for (const message of definitions.messages) {
 }
 
 const terminal = definitions.messages.at(-1);
-if (terminal.name !== 'SystemBroadcast' || terminal.value !== 33) {
-  fail('Terminal protocol value must remain SystemBroadcast = 33 for v1.1.5.');
+if (terminal.name !== 'FriendOnline' || terminal.value !== 42) {
+  fail('Terminal protocol value must be FriendOnline = 42 for v1.6.8+.');
 }
 
 console.log(`Protocol audit passed: ${definitions.messages.length} schemas, TypeScript enum, and C++ enum are aligned.`);

@@ -75,12 +75,24 @@ async function run() {
 
   a.write(frame('{"type":0,"nickname":"Alice","password":"pw"}'));
   b.write(frame('{"type":0,"nickname":"Bob","password":"pw"}'));
-  await wait(500);
+  await wait(1800);
   const aliceId = idFrom(replies.a.find((r) => r.includes('"type":1')), 'Alice registration');
   const bobId = idFrom(replies.b.find((r) => r.includes('"type":1')), 'Bob registration');
 
   a.write(frame(`{"type":2,"id":${aliceId},"password":"pw"}`));
   b.write(frame(`{"type":2,"id":${bobId},"password":"pw"}`));
+  await wait(1800);
+
+  b.write(frame(`{"type":34,"fromId":${bobId},"toId":${aliceId},"msg":"please alice"}`));
+  await wait(300);
+  a.write(frame(`{"type":38,"fromId":${bobId},"toId":${aliceId}}`));
+  await wait(300);
+  b.write(frame(`{"type":34,"fromId":${bobId},"toId":${aliceId},"msg":"retry too soon"}`));
+  await wait(300);
+
+  a.write(frame(`{"type":34,"fromId":${aliceId},"toId":${bobId},"msg":"add me"}`));
+  await wait(300);
+  b.write(frame(`{"type":36,"fromId":${aliceId},"toId":${bobId}}`));
   await wait(500);
 
   a.write(frame(`{"type":5,"fromId":${aliceId},"toId":${bobId},"msg":"hello-bob"}`));
@@ -91,7 +103,7 @@ async function run() {
   const groupReply = replies.a.find((r) => r.includes('"type":10'));
   const groupMatch = groupReply?.match(/"groupId":(\d+)/);
   if (!groupMatch) {
-    throw new Error('group creation did not return a groupId');
+    throw new Error(`group creation did not return a groupId: ${JSON.stringify(replies)}`);
   }
   const groupId = Number(groupMatch[1]);
   b.write(frame(`{"type":13,"id":${bobId},"groupId":${groupId}}`));
@@ -106,7 +118,7 @@ async function run() {
 
   const c = await connectClient('c', replies);
   c.write(frame(`{"type":2,"id":${bobId},"password":"pw"}`));
-  await wait(500);
+  await wait(1800);
 
   a.destroy();
   c.destroy();
@@ -120,6 +132,13 @@ async function run() {
     && replies.b.some((r) => r.includes('"type":21'))
     && replies.a.some((r) => r.includes('"type":3'))
     && replies.b.some((r) => r.includes('"type":3'))
+    && replies.a.some((r) => r.includes('"type":34') && r.includes('please alice'))
+    && replies.a.some((r) => r.includes('"type":39') && r.includes('"status":"ok"') && r.includes(`"friendId":${bobId}`))
+    && replies.b.some((r) => r.includes('"type":35') && r.includes('"status":"error"') && r.includes('friend request failed'))
+    && replies.a.some((r) => r.includes('"type":35') && r.includes('"status":"ok"'))
+    && replies.b.some((r) => r.includes('"type":34') && r.includes('add me'))
+    && replies.a.some((r) => r.includes('"type":37') && r.includes(`"friendId":${bobId}`))
+    && replies.b.some((r) => r.includes('"type":37') && r.includes(`"friendId":${aliceId}`))
     && replies.b.some((r) => r.includes('hello-bob'))
     && replies.b.some((r) => r.includes('"type":14'))
     && replies.b.some((r) => r.includes('hello-group'))

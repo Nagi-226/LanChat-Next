@@ -9,6 +9,8 @@ namespace lanchat::server {
 
 class FrameCodec {
 public:
+    static constexpr std::uint32_t MaxFrameBytes = 256 * 1024;
+
     static std::vector<std::uint8_t> encode(const std::string& json);
     static bool tryDecode(std::vector<std::uint8_t>& buffer, std::string& outJson);
 };

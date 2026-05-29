@@ -11,6 +11,7 @@ std::atomic<uint64_t> AsyncSession::next_id_{1};
 AsyncSession::AsyncSession(vendor::asio::io_context& ctx, TcpServer& server)
     : ctx_(ctx), server_(server), socket_(ctx), id_(next_id_.fetch_add(1, std::memory_order_relaxed)) {
     last_heartbeat_ = std::chrono::steady_clock::now();
+    rate_window_start_ = last_heartbeat_;
 }
 
 AsyncSession::~AsyncSession() {
@@ -57,7 +58,9 @@ void AsyncSession::doRead() {
             }
 
             // Cap per-session buffering so malformed peers cannot grow memory forever.
-            if (read_accumulator_.size() > 4 * 1024 * 1024) {
+            if (read_accumulator_.size() > FrameCodec::MaxFrameBytes) {
+                ServerLogger::instance().info(
+                    "session " + std::to_string(id_) + " exceeded frame buffer limit");
                 read_accumulator_.clear();
             }
 
@@ -93,6 +96,14 @@ void AsyncSession::doWrite() {
 }
 
 void AsyncSession::onMessage(const std::string& json) {
+    if (!consumeRateLimitToken()) {
+        ServerLogger::instance().info(
+            "session " + std::to_string(id_) + " exceeded rate limit, closing");
+        server_.removeSession(id_);
+        close();
+        return;
+    }
+
     bool ok = false;
     const auto request = protocol_json::parseObject(json, ok);
     if (ok && protocol_json::typeField(request) == lanchat::protocol::MsgType::Heartbeat) {
@@ -102,6 +113,16 @@ void AsyncSession::onMessage(const std::string& json) {
     }
     // Forward to server for dispatch
     server_.onMessage(shared_from_this(), json);
+}
+
+bool AsyncSession::consumeRateLimitToken() {
+    const auto now = std::chrono::steady_clock::now();
+    if (now - rate_window_start_ >= std::chrono::seconds(1)) {
+        rate_window_start_ = now;
+        messages_this_window_ = 0;
+    }
+    ++messages_this_window_;
+    return messages_this_window_ <= 20;
 }
 
 void AsyncSession::heartbeatReceived() {

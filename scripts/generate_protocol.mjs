@@ -143,7 +143,7 @@ function generateTypes() {
   lines.push('};');
   lines.push('');
   lines.push('export function isValidMsgType(value: number): value is MsgType {');
-  lines.push('  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.SystemBroadcast;');
+  lines.push(`  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.${definitions.messages.at(-1).name};`);
   lines.push('}');
   lines.push('');
   return `${lines.join('\n')}\n`;

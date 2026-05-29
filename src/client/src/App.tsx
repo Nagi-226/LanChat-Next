@@ -37,6 +37,7 @@ function HeaderActions() {
   const toggleAIPanel = useUIStore((s) => s.toggleAIPanel);
   const currentUser = useChatStore((s) => s.currentUser);
   const auth = useChatStore((s) => s.auth);
+  const friendRequests = useChatStore((s) => s.friendRequests);
   const status = useConnectionStore((s) => s.status);
 
   const statusLabel = status === 'connected' ? 'Live' : status === 'connecting' ? 'Connecting' : 'Offline';
@@ -49,6 +50,11 @@ function HeaderActions() {
       {currentUser && (
         <span className="hidden rounded-full bg-dark-highlight/10 px-2.5 py-1 text-[10px] font-medium text-dark-highlight sm:inline-flex">
           {auth.loading ? 'Syncing...' : currentUser.nickname}
+        </span>
+      )}
+      {friendRequests.length > 0 && (
+        <span className="rounded-full bg-dark-highlight px-2.5 py-1 text-[10px] font-bold text-white">
+          {friendRequests.length} pending
         </span>
       )}
       <motion.button
@@ -194,6 +200,7 @@ export function App() {
   const scheduleReconnect = useConnectionStore((s) => s.scheduleReconnect);
   const clearReconnect = useConnectionStore((s) => s.clearReconnect);
   const connectionError = useConnectionStore((s) => s.error);
+  const connectionStatus = useConnectionStore((s) => s.status);
 
   const currentUser = useChatStore((s) => s.currentUser);
   const auth = useChatStore((s) => s.auth);
@@ -203,11 +210,14 @@ export function App() {
   const messagesByGroup = useChatStore((s) => s.messagesByGroup);
   const activeContactId = useChatStore((s) => s.activeContactId);
   const activeGroupId = useChatStore((s) => s.activeGroupId);
+  const friendRequests = useChatStore((s) => s.friendRequests);
+  const friends = useChatStore((s) => s.friends);
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [showSplash, setShowSplash] = useState(true);
   const lastConnectionError = useRef<string | null>(null);
   const lastAuthError = useRef<string | null>(null);
+  const lastFriendRequestCount = useRef(0);
 
   const addToast = useCallback((type: ToastType, message: string) => {
     setToasts((items) => [...items, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, type, message }].slice(-4));
@@ -260,6 +270,13 @@ export function App() {
     }
     if (!auth.error) lastAuthError.current = null;
   }, [addToast, auth.error]);
+
+  useEffect(() => {
+    if (friendRequests.length > lastFriendRequestCount.current) {
+      addToast('info', 'New friend request received.');
+    }
+    lastFriendRequestCount.current = friendRequests.length;
+  }, [addToast, friendRequests.length]);
 
   useEffect(() => {
     const unlistenMsg = listen<string>('message-received', (event) => {
@@ -318,6 +335,7 @@ export function App() {
   const activeGroupMessages = activeGroupId ? messagesByGroup[activeGroupId] || [] : [];
   const activeContact = contacts.find((c) => c.id === activeContactId);
   const activeGroup = groups.find((g) => g.groupId === activeGroupId);
+  const connected = connectionStatus === 'connected';
   const activeGroupMembers = useMemo<Member[]>(() => {
     if (!currentUser || !activeGroup) return [];
     const users = activeGroup.users || [];
@@ -423,8 +441,16 @@ export function App() {
                   members={activeGroupMembers}
                   currentUserId={currentUser.id}
                   groupName={activeGroup.name}
+                  connected={connected}
                   onSend={(content) => {
                     void useChatStore.getState().sendGroupMessage(activeGroup.groupId, content).catch((e) => addToast('error', String(e)));
+                  }}
+                  onRetryFailed={(message) => {
+                    void useChatStore.getState().sendGroupMessage(activeGroup.groupId, message.content).catch((e) => addToast('error', String(e)));
+                  }}
+                  friendIds={friends.map((friend) => friend.id)}
+                  onAddFriend={(memberId) => {
+                    void useChatStore.getState().sendFriendRequest(memberId, 'Hi from the group chat.').catch((e) => addToast('error', String(e)));
                   }}
                 />
               ) : activeContact ? (
@@ -432,8 +458,12 @@ export function App() {
                   messages={activeMessages}
                   currentUserId={currentUser.id}
                   contactName={activeContact.nickname}
+                  connected={connected}
                   onSend={(content) => {
                     void useChatStore.getState().sendPrivateMessage(activeContact.id, content).catch((e) => addToast('error', String(e)));
+                  }}
+                  onRetryFailed={(message) => {
+                    void useChatStore.getState().sendPrivateMessage(activeContact.id, message.content).catch((e) => addToast('error', String(e)));
                   }}
                 />
               ) : (

@@ -36,6 +36,15 @@ export enum MsgType {
   AIStreamChunk = 31,
   UserProfileUpdate = 32,
   SystemBroadcast = 33,
+  FriendRequest = 34,
+  FriendRequestAck = 35,
+  FriendAccept = 36,
+  FriendAcceptReturn = 37,
+  FriendRemove = 38,
+  FriendRemoveReturn = 39,
+  FriendList = 40,
+  FriendListReturn = 41,
+  FriendOnline = 42,
 }
 
 export type ContentType = 'text' | 'image' | 'file' | 'system';
@@ -323,6 +332,69 @@ export interface SystemBroadcastMessage extends ProtocolMessageBase {
   code?: number;
 }
 
+export interface FriendRequestMessage extends ProtocolMessageBase {
+  type: MsgType.FriendRequest;
+  fromId: number;
+  toId: number;
+  msg?: string;
+}
+
+export interface FriendRequestAckMessage extends ProtocolMessageBase {
+  type: MsgType.FriendRequestAck;
+  requestId: string;
+  status: ProtocolStatus;
+  msg?: string;
+  code?: number;
+}
+
+export interface FriendAcceptMessage extends ProtocolMessageBase {
+  type: MsgType.FriendAccept;
+  fromId: number;
+  toId: number;
+}
+
+export interface FriendAcceptReturnMessage extends ProtocolMessageBase {
+  type: MsgType.FriendAcceptReturn;
+  status: ProtocolStatus;
+  friendId: number;
+  nickname?: string;
+  headId?: number;
+  msg?: string;
+  code?: number;
+}
+
+export interface FriendRemoveMessage extends ProtocolMessageBase {
+  type: MsgType.FriendRemove;
+  fromId: number;
+  toId: number;
+}
+
+export interface FriendRemoveReturnMessage extends ProtocolMessageBase {
+  type: MsgType.FriendRemoveReturn;
+  status: ProtocolStatus;
+  friendId?: number;
+  msg?: string;
+  code?: number;
+}
+
+export interface FriendListMessage extends ProtocolMessageBase {
+  type: MsgType.FriendList;
+  id: number;
+}
+
+export interface FriendListReturnMessage extends ProtocolMessageBase {
+  type: MsgType.FriendListReturn;
+  friends: UserInfo[];
+}
+
+export interface FriendOnlineMessage extends ProtocolMessageBase {
+  type: MsgType.FriendOnline;
+  friendId: number;
+  status: ProtocolStatus;
+  nickname?: string;
+  headId?: number;
+}
+
 export type ProtocolMessage =
   RegisterUserMessage |
   RegisterUserReturnMessage |
@@ -357,7 +429,16 @@ export type ProtocolMessage =
   AIResponseMessage |
   AIStreamChunkMessage |
   UserProfileUpdateMessage |
-  SystemBroadcastMessage;
+  SystemBroadcastMessage |
+  FriendRequestMessage |
+  FriendRequestAckMessage |
+  FriendAcceptMessage |
+  FriendAcceptReturnMessage |
+  FriendRemoveMessage |
+  FriendRemoveReturnMessage |
+  FriendListMessage |
+  FriendListReturnMessage |
+  FriendOnlineMessage;
 
 export const MSG_TYPE_NAMES: Record<MsgType, string> = {
   [MsgType.RegisterUser]: 'registerUser',
@@ -394,9 +475,18 @@ export const MSG_TYPE_NAMES: Record<MsgType, string> = {
   [MsgType.AIStreamChunk]: 'aiStreamChunk',
   [MsgType.UserProfileUpdate]: 'userProfileUpdate',
   [MsgType.SystemBroadcast]: 'systemBroadcast',
+  [MsgType.FriendRequest]: 'friendRequest',
+  [MsgType.FriendRequestAck]: 'friendRequestAck',
+  [MsgType.FriendAccept]: 'friendAccept',
+  [MsgType.FriendAcceptReturn]: 'friendAcceptReturn',
+  [MsgType.FriendRemove]: 'friendRemove',
+  [MsgType.FriendRemoveReturn]: 'friendRemoveReturn',
+  [MsgType.FriendList]: 'friendList',
+  [MsgType.FriendListReturn]: 'friendListReturn',
+  [MsgType.FriendOnline]: 'friendOnline',
 };
 
 export function isValidMsgType(value: number): value is MsgType {
-  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.SystemBroadcast;
+  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.FriendOnline;
 }
 

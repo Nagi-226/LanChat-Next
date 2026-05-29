@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 export interface RecentServer {
   host: string;
@@ -18,6 +19,7 @@ interface ConnectionState {
   retryCount: number;
   retryTimer: number | null;
   retryDueAt: number | null;
+  reconnectTimer: number | null;
   recentServers: RecentServer[];
   setHost: (host: string) => void;
   setPort: (port: number) => void;
@@ -31,8 +33,6 @@ interface ConnectionState {
   scheduleReconnect: () => void;
   clearReconnect: () => void;
 }
-
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function rememberServer(servers: RecentServer[], server: RecentServer): RecentServer[] {
   const deduped = servers.filter((item) => item.host !== server.host || item.port !== server.port);
@@ -50,13 +50,14 @@ export const useConnectionStore = create<ConnectionState>()(
       retryCount: 0,
       retryTimer: null,
       retryDueAt: null,
+      reconnectTimer: null,
       recentServers: [],
 
       setHost: (host) => set({ host, error: null }),
       setPort: (port) => set({ port, error: null }),
       selectServer: (server) => set({ host: server.host, port: server.port, error: null }),
       dismissError: () => set({ error: null }),
-      setDisconnected: () => set({ status: 'disconnected', lastHeartbeat: null, retryCount: 0 }),
+      setDisconnected: () => set({ status: 'disconnected', lastHeartbeat: null }),
 
       connect: async (host, port) => {
         get().clearReconnect();
@@ -68,6 +69,9 @@ export const useConnectionStore = create<ConnectionState>()(
             error: null,
             lastHeartbeat: Date.now(),
             retryCount: 0,
+            retryTimer: null,
+            retryDueAt: null,
+            reconnectTimer: null,
             recentServers: rememberServer(s.recentServers, { host, port }),
           }));
         } catch (e) {
@@ -97,23 +101,33 @@ export const useConnectionStore = create<ConnectionState>()(
 
       scheduleReconnect: () => {
         const { status, host, port, retryCount } = get();
-        if (status === 'connected' || reconnectTimer) return;
+        if (status === 'connected' || get().reconnectTimer) return;
+        if (retryCount >= MAX_RECONNECT_ATTEMPTS) {
+          set({
+            status: 'disconnected',
+            error: `Reconnect stopped after ${MAX_RECONNECT_ATTEMPTS} attempts.`,
+            retryTimer: null,
+            retryDueAt: null,
+            reconnectTimer: null,
+          });
+          return;
+        }
 
         const delay = Math.min(1000 * 2 ** retryCount, 30000);
-        set({ retryTimer: delay, retryDueAt: Date.now() + delay, retryCount: retryCount + 1, status: 'connecting' });
-
-        reconnectTimer = setTimeout(() => {
-          reconnectTimer = null;
+        const timer = window.setTimeout(() => {
+          set({ reconnectTimer: null, retryTimer: null, retryDueAt: null });
           void get().connect(host, port);
         }, delay);
+
+        set({ retryTimer: delay, retryDueAt: Date.now() + delay, retryCount: retryCount + 1, status: 'connecting', reconnectTimer: timer });
       },
 
       clearReconnect: () => {
+        const { reconnectTimer } = get();
         if (reconnectTimer) {
-          clearTimeout(reconnectTimer);
-          reconnectTimer = null;
+          window.clearTimeout(reconnectTimer);
         }
-        set({ retryTimer: null, retryDueAt: null });
+        set({ retryTimer: null, retryDueAt: null, reconnectTimer: null });
       },
     }),
     {

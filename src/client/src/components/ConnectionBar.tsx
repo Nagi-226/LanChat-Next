@@ -9,6 +9,7 @@ export function ConnectionBar() {
   const port = useConnectionStore((s) => s.port);
   const error = useConnectionStore((s) => s.error);
   const lastHeartbeat = useConnectionStore((s) => s.lastHeartbeat);
+  const retryCount = useConnectionStore((s) => s.retryCount);
   const retryTimer = useConnectionStore((s) => s.retryTimer);
   const recentServers = useConnectionStore((s) => s.recentServers);
   const connect = useConnectionStore((s) => s.connect);
@@ -83,8 +84,13 @@ export function ConnectionBar() {
         </ClickSpark>
       )}
       {status === 'connecting' && (
-        <span>
+        <span className="flex items-center gap-1">
           <ShinyText text={`Connecting...${retryTimer ? ` retry in ${Math.ceil(retryTimer / 1000)}s` : ''}`} color="#f59e0b" />
+          {retryCount > 0 && (
+            <span className="text-light-muted dark:text-dark-muted">
+              attempt {retryCount}/5
+            </span>
+          )}
         </span>
       )}
       {status === 'connected' && (

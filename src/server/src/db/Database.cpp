@@ -11,9 +11,21 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
 #include <sstream>
 
 namespace lanchat::server::db {
+
+namespace {
+
+bool isIdentifier(const std::string& value) {
+    if (value.empty()) return false;
+    return std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+        return std::isalnum(ch) || ch == '_';
+    });
+}
+
+} // namespace
 
 Database::Database(const std::string& dataDir) : data_dir_(dataDir) {}
 
@@ -96,6 +108,55 @@ void Database::ensureTable(const std::string& name) {
                                        (errMsg ? errMsg : "unknown error"));
         sqlite3_free(errMsg);
     }
+}
+
+void Database::createIndex(const std::string& table,
+                           const std::string& indexName,
+                           const std::string& expression) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!isIdentifier(table) || !isIdentifier(indexName) || expression.empty()) {
+        ServerLogger::instance().error("Refusing unsafe index definition: " + indexName);
+        return;
+    }
+    const std::string sql = "CREATE INDEX IF NOT EXISTS \"" + indexName + "\" ON \"" +
+                            table + "\"(" + expression + ");";
+    execSql(sql);
+}
+
+bool Database::migrate(int targetVersion) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    int current = schemaVersion();
+    if (targetVersion < current) return false;
+
+    while (current < targetVersion) {
+        if (current == 0) {
+            ensureTable("users");
+            ensureTable("messages");
+            ensureTable("groups");
+            ensureTable("group_members");
+
+            createIndex("users", "idx_users_id", "json_extract(data, '$.id')");
+            createIndex("users", "idx_users_nickname", "json_extract(data, '$.nickname')");
+            createIndex("messages", "idx_messages_from_id", "json_extract(data, '$.from_id')");
+            createIndex("messages", "idx_messages_to_id", "json_extract(data, '$.to_id')");
+            createIndex("messages", "idx_messages_group_id", "json_extract(data, '$.group_id')");
+            createIndex("messages", "idx_messages_timestamp", "json_extract(data, '$.timestamp')");
+            createIndex("groups", "idx_groups_group_id", "json_extract(data, '$.group_id')");
+            createIndex("group_members", "idx_gm_user_id", "json_extract(data, '$.user_id')");
+            createIndex("group_members", "idx_gm_group_id", "json_extract(data, '$.group_id')");
+            createFriendshipsTable();
+
+            setSchemaVersion(1);
+            current = 1;
+            continue;
+        }
+
+        // Version slots above 1 are intentionally reserved for future migrations.
+        setSchemaVersion(current + 1);
+        ++current;
+    }
+
+    return true;
 }
 
 RowList Database::query(const std::string& name,
@@ -198,6 +259,33 @@ void Database::saveTable(const std::string& name) const {
     }
 
     sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, nullptr);
+}
+
+bool Database::execSql(const std::string& sql) const {
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        ServerLogger::instance().error("SQL failed: " + std::string(errMsg ? errMsg : "unknown error"));
+        sqlite3_free(errMsg);
+        return false;
+    }
+    return true;
+}
+
+void Database::createFriendshipsTable() {
+    execSql(
+        "CREATE TABLE IF NOT EXISTS friendships ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "from_uid INTEGER NOT NULL,"
+        "to_uid INTEGER NOT NULL,"
+        "status TEXT NOT NULL CHECK(status IN ('pending','accepted','rejected')),"
+        "request_msg TEXT DEFAULT '',"
+        "created_at INTEGER NOT NULL,"
+        "updated_at INTEGER NOT NULL,"
+        "UNIQUE(from_uid, to_uid)"
+        ");");
+    execSql("CREATE INDEX IF NOT EXISTS idx_fs_from ON friendships(from_uid, status);");
+    execSql("CREATE INDEX IF NOT EXISTS idx_fs_to ON friendships(to_uid, status);");
+    execSql("CREATE INDEX IF NOT EXISTS idx_fs_both ON friendships(from_uid, to_uid);");
 }
 
 } // namespace lanchat::server::db

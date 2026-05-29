@@ -3,7 +3,7 @@
 LanChat-Next 客户端开发指南。Codex 负责 React 18 UI + Tauri v2 Rust 桥接层的实际开发，
 Claude 负责 C++17 服务端架构设计。两端通过 `protocol/` 对齐。
 
-> 最后更新: 2026-05-26 | 当前版本: v1.6.0 | 下一目标: v2.0.0 服务端加固轨道
+> 最后更新: 2026-05-29 | 当前版本: v1.7.0 | 下一目标: v2.0.0 企业级加固
 > 竞品调研: `docs/agent-reach-research-v1.5.md` — 8 同类项目 + 5 Chat UI 组件库 + shadcn 官方 Blocks + 设计系统 + 色系对标 + Glassmorphism 库
 
 ## Codex 负责范围
@@ -671,12 +671,40 @@ AnimatedContent（GSAP ScrollTrigger, App.tsx 聊天区水平滑动切换）。
 
 ---
 
-## 当前执行：v1.6.0 → v1.7.0 客户端质量加固 + AI 面板
+## 当前执行：v1.7.0 正式标签 ✅
 
-> v1.3.x ✅ + v1.4.x ✅ + v1.5.0 ✅ + v1.5.1–v1.5.6 ✅ 全部完成。
-> v1.6.0 ✅ Phase 4 正式标签条件达成。
-> **2026-05-26** 全项目深度审计完成：发现 3 个 P0 + 4 个 P1 + 3 个 P2 问题，已全部修复。
-> v1.6.0→v1.7.0 新增中间版本以消化审计发现的代码质量问题，不再直接跳 v2.0.0。
+> v1.3.x ✅ + v1.4.x ✅ + v1.5.0 ✅ + v1.5.1–v1.5.6 ✅ + v1.6.0 ✅ + v1.6.1–v1.6.10 ✅ + v1.7.0 ✅ 全部完成。
+> **2026-05-26** 全项目深度审计完成：发现 3 P0 + 4 P1 + 3 P2，已全部修复。
+> **2026-05-29** 重新规划→Codex 全量实现→审计验证通过。设计文档：`docs/superpowers/specs/2026-05-29-v1.6.0-v1.7.0-redesign.md`，审计报告：`docs/audit-report-2026-05-29.md`。
+
+### 架构决策（2026-05-29）
+
+| 决策 | 选项 | 理由 |
+|------|------|------|
+| 数据库改造 | 渐进式（旧表加 JSON 表达式索引 + 新表规范化） | 匹配项目渐进迁移哲学，500 用户 LAN 下性能足够 |
+| 好友系统 | 双向确认制（请求→接受/拒绝→互为好友） | 标准 IM 语义 |
+| AI 面板首期 | 搜索 MVP + 对话摘要，AIService 抽象接口预留扩展 | 服务端搜索已就绪，LLM 通过接口解耦 |
+| 密码哈希 | 本迭代迁移 bcrypt，旧 sha256 自动升级 | 开发阶段用户少迁移成本低 |
+| CI/CD | 4 层门禁（L1 pre-commit / L2 pre-PR / L3 质量门 / L4 merge gate） | 企业级质量保障 |
+
+### 版本路线图 (v1.6.0 → v1.7.0)
+
+```
+v1.6.0 ✅ (当前)   Phase 1-4 动画完成
+    │
+v1.6.1   客户端 DRY + 代码质量           (ChatArea/GroupChatArea 重构)
+v1.6.2   连接状态 & Store 加固            (connectionStore + 最大重试)
+v1.6.3   C++ Server 安全加固              (bcrypt + 速率限制 + 帧校验)
+v1.6.4   UI 边界状态全覆盖                 (断连/空态/错误/loading)
+v1.6.5   数据库渐进式改造 ★               (索引 + migration + friendships 表)
+v1.6.6   AI 面板 — 搜索 MVP               (Sidebar 对接已有 search 接口)
+v1.6.7   AI 面板 — 对话摘要               (LLM 集成 + AIService 抽象)
+v1.6.8   好友系统 — 协议 + 数据库          (protocol 34-42 + FriendRepository)
+v1.6.9   好友系统 — 服务端 + 客户端        (路由 + UI)
+v1.6.10  预 v1.7.0 质量门                  (L3 全栈审计 + 集成测试)
+    │
+v1.7.0   正式标签                          (AI 面板 + 好友系统 + 安全加固)
+```
 
 v1.6.0 审计基线（2026-05-26）：
 
@@ -693,28 +721,25 @@ v1.6.0 审计基线（2026-05-26）：
 
 **目标**：消除两个聊天组件 ~80% 代码重复（~150 行）。
 
-**背景**：ChatArea 和 GroupChatArea 的滚动逻辑、输入处理、"New messages" 按钮、骨架屏切换逻辑几乎完全相同，仅在消息气泡渲染（私聊 vs 群聊显示昵称）和标题栏有差异。v1.6.0 审计标记为 P2，在 v2.0.0 前完成。
-
 **重复项清单**：
-| 逻辑 | ChatArea 位置 | GroupChatArea 位置 | 提取方案 |
-|------|--------------|-------------------|----------|
-| `scrollToBottom` + `syncNearBottom` | L93-107 | L77-91 | → `hooks/useChatScroll.ts` |
-| `handleSend` + `handleInput` + `handleKeyDown` | L125-144 | L109-129 | → `hooks/useChatInput.ts` |
-| `handleJumpToLatest` + "New messages" 按钮 | L147-220 | L124-206 | → 组件 `NewMessagesFAB` |
-| `AnimatePresence` 3 态切换 (skeleton/empty/messages) | L173-202 | L159-188 | → 组件 `ChatContentSwitcher` |
-| 消息输入区 (textarea + send button) | L223-258 | L209-246 | → 组件 `MessageComposer` |
+| 逻辑 | 提取方案 |
+|------|----------|
+| `scrollToBottom` + `syncNearBottom` + "New messages" 状态 | `hooks/useChatScroll.ts` |
+| `handleSend` + `handleInput` + `handleKeyDown` + auto-resize | `hooks/useChatInput.ts` |
+| "↓ New messages" 浮动按钮 | `lib/ChatComponents.tsx` → `NewMessagesFAB` |
+| `AnimatePresence` 三态切换 (skeleton/empty/messages) | `lib/ChatComponents.tsx` → `ChatContentSwitcher` |
+| 消息输入区 (textarea + send button) | `lib/ChatComponents.tsx` → `MessageComposer` |
 
 **任务清单**：
 
 | # | 任务 | 涉及文件 |
 |---|------|----------|
-| 1 | 新建 `hooks/useChatScroll.ts` — 封装 scrollToBottom + syncNearBottom + NewMessages 状态 | `hooks/useChatScroll.ts` (new) |
-| 2 | 新建 `hooks/useChatInput.ts` — 封装 input state + handleSend + handleInput + auto-resize | `hooks/useChatInput.ts` (new) |
-| 3 | 提取 `NewMessagesFAB` 组件到 `lib/` | `lib/ChatComponents.tsx` (new) |
-| 4 | 提取 `MessageComposer` 组件到 `lib/` | `lib/ChatComponents.tsx` |
-| 5 | ChatArea 改用提取的 hooks + components | `ChatArea.tsx` |
-| 6 | GroupChatArea 改用提取的 hooks + components | `GroupChatArea.tsx` |
-| 7 | 验证两组件功能无回归（滚动/发送/骨架屏/New messages） | 手动测试 |
+| 1 | 新建 `hooks/useChatScroll.ts` | new |
+| 2 | 新建 `hooks/useChatInput.ts` | new |
+| 3 | 提取 `NewMessagesFAB`, `ChatContentSwitcher`, `MessageComposer` 到 `lib/ChatComponents.tsx` | new |
+| 4 | ChatArea 改用提取的 hooks + components | `ChatArea.tsx` |
+| 5 | GroupChatArea 改用提取的 hooks + components | `GroupChatArea.tsx` |
+| 6 | 验证两组件功能无回归 | 手动测试 |
 
 **完成标准**：ChatArea + GroupChatArea 合计减少 ≥120 行，`npx tsc --noEmit` 零错误，两个聊天面板功能完全一致。
 
@@ -724,111 +749,301 @@ v1.6.0 审计基线（2026-05-26）：
 
 **目标**：消除 connectionStore 的模块级 `reconnectTimer`，加强连接生命周期管理。
 
-**背景**：connectionStore.ts L35 `let reconnectTimer` 在 Zustand store 外部，理论上多实例共享同一个定时器。同时自动重连逻辑缺乏最大重试次数上限（当前指数退避到 30s 后无限重试）。
-
 **任务清单**：
 
 | # | 任务 | 涉及文件 |
 |---|------|----------|
-| 1 | 将 `reconnectTimer` 移入 store state（作为 `number \| null` 存储 timer ID） | `connectionStore.ts` |
-| 2 | 添加最大重连次数限制（max 5 次），超限后停止自动重连并设置 error | `connectionStore.ts` |
-| 3 | `disconnect()` 调用时清理 `reconnectTimer` | `connectionStore.ts` |
-| 4 | 连接成功时重置 `retryCount` 为 0（已有，确认正确） | `connectionStore.ts` |
-| 5 | ConnectionBar 显示重连次数/状态信息 | `ConnectionBar.tsx` |
+| 1 | `reconnectTimer` 从模块级移入 store state（`number \| null`） | `connectionStore.ts` |
+| 2 | 最大重连次数限制 5 次，超限停止并设 error | `connectionStore.ts` |
+| 3 | `disconnect()` 清理 `reconnectTimer` | `connectionStore.ts` |
+| 4 | 连接成功重置 `retryCount` 为 0 | `connectionStore.ts` |
+| 5 | ConnectionBar 显示重连次数/状态 | `ConnectionBar.tsx` |
 
-**完成标准**：store 内部不再引用模块级变量，自动重连最多 5 次后停止并提示用户手动连接。
+**完成标准**：store 内无模块级变量引用，自动重连最多 5 次后停止。
 
 ---
 
-### v1.6.3 — C++ Server 加固
+### v1.6.3 — C++ Server 安全加固
 
-**目标**：对 C++ Server 端做基础安全加固，补齐审计发现的薄弱点。
+**目标**：基础安全措施补齐 + bcrypt 密码迁移。
 
-**背景**：当前 server 处于 "smoke-level routing/persistence" 水平。需要在进入 v2.0.0 深度加固之前补齐基础安全措施。
+#### bcrypt 密码迁移
+- vendor: `vendor/bcrypt.h`（BSD 许可，单头文件）
+- `UserRepository::create()` 改用 bcrypt，cost factor=12
+- `UserRepository::verifyPassword()` 查 `password_version` 字段（0=sha256, 1=bcrypt），sha256 验证成功后自动升级
+- 用户 Row 新增 `password_version` 字段
+- 现存用户零感知：下次登录时自动完成升级
 
-**任务清单**：
+#### 速率限制
+- `AsyncSession` 每 session 每秒最多 20 条消息，超限断开
 
-| # | 任务 | 涉及文件 |
-|---|------|----------|
-| 1 | 速率限制基础：每 session 每秒最多处理 20 条消息，超限断开 | `AsyncSession.cpp`, `AsyncSession.h` |
-| 2 | 帧大小上限从 4 MiB 降低到 256 KiB（聊天消息不应超过此值） | `FrameCodec.cpp` |
-| 3 | 无效帧不返回 `{"type":33,...}` 伪消息（当前 try_decode_frame 对超限帧返回假 JSON），改为丢弃并记录日志 | `message_codec.rs`, `FrameCodec.cpp` |
-| 4 | Server `--port` 参数校验（拒绝 0、>65535、特权端口 <1024 警告） | `main.cpp` |
-| 5 | 数据库 WAL 模式 + busy_timeout 确认已配置 | `Database.cpp` |
+#### 帧大小 + 端口校验
+- 帧大小上限 4 MiB → 256 KiB
+- 无效帧丢弃 + 日志，不返回伪 JSON（防止信息泄露）
+- `main.cpp` 端口参数校验（拒绝 0、>65535、<1024 警告）
 
-**完成标准**：`cmake --build` + `ctest` 通过，server 具备基本防护能力。
+**改动范围**：`vendor/bcrypt.h`(new), `UserRepository.h/cpp`, `AsyncSession.h/cpp`, `FrameCodec.h/cpp`, `main.cpp`, `frame_codec_tests.cpp`
+
+**完成标准**：`cmake --build` + `ctest` 通过，bcrypt 迁移幂等。
 
 ---
 
 ### v1.6.4 — UI 边界状态全覆盖
 
-**目标**：确保所有组件在 loading / empty / error / disconnected 四种边界状态下有合理的 UI 表现。
-
-**背景**：当前部分组件对边界状态处理不完整（如断连后发送消息的错误提示、群聊无成员时的空态等）。
-
-**任务清单**：
+**目标**：所有组件在 loading / empty / error / disconnected 四种边界状态有合理 UI。
 
 | # | 任务 | 涉及文件 |
 |---|------|----------|
-| 1 | 断连状态下发送按钮 disabled + tooltip "Not connected" | `ChatArea.tsx`, `GroupChatArea.tsx` |
-| 2 | 断连状态下输入框 disabled（placeholder 改为 "Disconnected..."） | `ChatArea.tsx`, `GroupChatArea.tsx` |
+| 1 | 断连状态：发送按钮 disabled + tooltip "Not connected" | `ChatArea.tsx`, `GroupChatArea.tsx` |
+| 2 | 断连状态：输入框 disabled + placeholder "Disconnected..." | `ChatArea.tsx`, `GroupChatArea.tsx` |
 | 3 | 群聊成员列表空态（"No members" 占位） | `GroupChatArea.tsx` |
-| 4 | 联系人列表全部离线时的视觉提示 | `ContactList.tsx` |
-| 5 | 群组列表为空时的引导文案（"Create or join a group to get started"） | `ContactList.tsx` |
-| 6 | 消息发送失败后的重试按钮（当前仅显示 "failed" 文字） | `ChatArea.tsx`, `GroupChatArea.tsx` |
+| 4 | 联系人全部离线时的视觉提示 | `ContactList.tsx` |
+| 5 | 群组列表为空时的引导文案 | `ContactList.tsx` |
+| 6 | 消息发送失败后的重试按钮 | `ChatArea.tsx`, `GroupChatArea.tsx` |
 
-**完成标准**：遍历所有 4 种边界状态，每个组件在每个状态下都有合理的 UI。
+**完成标准**：遍历 4 种边界状态 × 关键组件，每组合有合理 UI。
 
 ---
 
-### v1.6.5 — 预 v1.7.0 质量门
+### v1.6.5 — 数据库渐进式改造 ★ 核心基础设施
 
-**目标**：v1.7.0 将引入首个业务功能（AI 面板），在此之前再做一次全量审计。
+**目标**：为现有表添加 SQLite 表达式索引（对 Repository 透明），建立 migration 框架，创建规范化的 friendships 表。
+
+#### Database 类新增
+
+```cpp
+void createIndex(const std::string& table, const std::string& indexName, const std::string& expression);
+bool migrate(int targetVersion);
+```
+
+#### 表达式索引（Repository 无需修改）
+
+```sql
+CREATE INDEX idx_users_id ON users(json_extract(data, '$.id'));
+CREATE INDEX idx_users_nickname ON users(json_extract(data, '$.nickname'));
+CREATE INDEX idx_messages_from_id ON messages(json_extract(data, '$.from_id'));
+CREATE INDEX idx_messages_to_id ON messages(json_extract(data, '$.to_id'));
+CREATE INDEX idx_messages_group_id ON messages(json_extract(data, '$.group_id'));
+CREATE INDEX idx_messages_timestamp ON messages(json_extract(data, '$.timestamp'));
+CREATE INDEX idx_groups_group_id ON groups(json_extract(data, '$.group_id'));
+CREATE INDEX idx_gm_user_id ON group_members(json_extract(data, '$.user_id'));
+CREATE INDEX idx_gm_group_id ON group_members(json_extract(data, '$.group_id'));
+```
+
+#### Migration 框架
+
+基于已有 `schema_version` 表，顺序迁移链：v0→v1（添加表达式索引 + 创建 friendships 表）。
+
+#### 规范化 friendships 表
+
+```sql
+CREATE TABLE friendships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_uid INTEGER NOT NULL, to_uid INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('pending','accepted','rejected')),
+    request_msg TEXT DEFAULT '',
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+    UNIQUE(from_uid, to_uid)
+);
+CREATE INDEX idx_fs_from ON friendships(from_uid, status);
+CREATE INDEX idx_fs_to ON friendships(to_uid, status);
+```
+
+**改动范围**：`Database.h/cpp`, `database_tests.cpp`(new)
+
+**完成标准**：migrate(1) 幂等，已有 Repository 查询全部通过，索引对上层透明。
+
+---
+
+### v1.6.6 — AI 面板：搜索 MVP
+
+**目标**：Sidebar 对接服务端已有的 AI 消息搜索接口（`MessageRouter::handleAIRequest`，`ai_type="search"`）。
 
 **任务清单**：
 
-| # | 任务 | 具体做法 |
+| # | 任务 | 涉及文件 |
 |---|------|----------|
-| 1 | `codebase-health-audit` skill 复查 | 运行 6-pillar 审计，确认 v1.6.1–v1.6.4 无新问题 |
-| 2 | `npx tsc --noEmit` + `npm run build` + `cargo check` | 构建三连 |
-| 3 | `cmake --build` + `ctest` | C++ Server 构建和测试 |
-| 4 | React DevTools Profiler 录制 | 确认无不必要 re-render |
-| 5 | Tauri desktop E2E 冒烟 | login → select → send → receive → theme toggle |
-| 6 | Bundle 体积记录 | CSS/JS gzip 体积，与 v1.6.0 基线对比 |
-| 7 | 记录已知问题到 v1.7.0 backlog | 无法在当前版本修复的非阻塞问题 |
+| 1 | chatStore 新增 `searchResults[]`, `isSearching`, `searchMessages(query)` action | `chatStore.ts` |
+| 2 | `handleIncomingMessage` 新增 case `AIResponse`(30) | `chatStore.ts` |
+| 3 | Sidebar 搜索 UI：输入框（300ms debounce）+ 结果列表 + 分类过滤 [全部/私聊/群聊] | `Sidebar.tsx` |
+| 4 | 搜索结果关键词高亮 | `Sidebar.tsx` |
+| 5 | ChatArea 新增 `scrollToMessage(msgId)` 方法 | `ChatArea.tsx` |
+| 6 | 点击搜索结果跳转到对应消息位置 | `Sidebar.tsx` |
+| 7 | 三态：loading（骨架脉冲）/ empty（"No results"）/ results | `Sidebar.tsx` |
 
-**完成标准**：所有指标达标，可以安全进入 v1.7.0。
+**完成标准**：搜索关键词返回匹配结果，点击跳转到正确消息。
 
 ---
 
-### v1.7.0 — AI 助手面板 + 好友系统
+### v1.6.7 — AI 面板：对话摘要 + AIService 抽象
 
-**目标**：实现 Sidebar AI 助手面板的基础功能，并添加好友请求/接受机制。
+**目标**：实现对话摘要功能（AI summarize），建立可扩展的 AIService 插件架构为后续 translate/chat/Ollama 预留接口。
 
-**背景**：Sidebar.tsx 目前是纯占位（"AI features are scheduled for v1.7.0"）。服务端已有 `AIRequest`/`AIResponse` 消息类型和本地搜索功能（`MessageRouter::handleAIRequest` 实现 `ai_type="search"` 的本地消息搜索）。
+#### AIService 抽象
 
-**AI 面板任务清单**：
+```
+lib/ai/
+├── AIService.ts         ← 抽象接口
+├── providers/
+│   ├── LocalSearch.ts   ← v1.6.6 已有（ai_type="search"）
+│   └── ClaudeAPI.ts     ← v1.6.7 新增
+├── useAI.ts             ← AI hook（provider 选择 + 状态管理）
+└── types.ts             ← AIRequestType, AIProvider config
+```
 
-| # | 任务 | 涉及文件 |
-|---|------|----------|
-| 1 | AI 面板 UI：消息搜索输入框 + 搜索结果列表 | `Sidebar.tsx` |
-| 2 | 搜索结果项：点击跳转到对应消息位置 | `Sidebar.tsx`, `ChatArea.tsx` |
-| 3 | 搜索 loading/empty/error 三态 | `Sidebar.tsx` |
-| 4 | chatStore 新增 `searchMessages(query)` action → TCP 发送 AIRequest | `chatStore.ts` |
-| 5 | `handleIncomingMessage` 新增 `AIResponse`(17) case | `chatStore.ts` |
-| 6 | 搜索结果高亮匹配文本 | `Sidebar.tsx` |
+#### 接口定义
 
-**好友系统任务清单**：
+```typescript
+interface AIService {
+  readonly id: string;
+  readonly name: string;
+  readonly capabilities: AIRequestType[];
+  execute(request: AIRequest): Promise<AIResponse>;
+  executeStream?(request: AIRequest, onChunk: (chunk: AIStreamChunk) => void): Promise<void>;
+}
+```
 
-| # | 任务 | 涉及文件 |
-|---|------|----------|
-| 7 | 协议新增 `FriendRequest`(18) / `FriendAccept`(19) 消息类型 | `protocol/` |
-| 8 | 服务端实现好友请求/接受/列表 | `MessageRouter.cpp`, `UserRepository.cpp` |
-| 9 | 客户端联系人右键菜单（"Add Friend" / "Remove Friend"） | `ContactList.tsx` |
-| 10 | 好友请求通知（toast + ContactList badge） | `App.tsx`, `ContactList.tsx` |
-| 11 | chatStore 处理 FriendRequest/FriendAccept/UserUnfriend | `chatStore.ts` |
+#### ClaudeAPI Provider
+- 通过服务端中转（客户端不直接调 Anthropic API）
+- 服务端新增 `ai_type="summarize"` 处理：收集最近 50 条消息 → 调 Claude API → 流式 `AIStreamChunk`
+- API key 存储：Tauri 端加密（Rust keyring crate 或 AES-GCM）
+- 协议 `AIStreamChunk(31)` 已就绪，天然支持 SSE → frame 转换
 
-**完成标准**：AI 面板可搜索本地聊天记录并跳转；用户可向其他在线用户发送好友请求，对方可接受/拒绝。
+#### Sidebar 扩展
+- 模式切换 [搜索] [摘要] tabs
+- 摘要模式：选择对话 → 点击"生成摘要" → 流式显示
+- AI 设置区：Provider 选择 / Model / API Key 管理
+
+**完成标准**：选择对话→生成摘要→流式显示，provider 可切换。
+
+---
+
+### v1.6.8 — 好友系统：协议 + 数据库设计
+
+**目标**：定义好友协议（9 个消息类型 34–42），实现 FriendRepository。
+
+#### 协议新增
+
+```
+FriendRequest(34)       A → B 发送好友请求
+FriendRequestAck(35)    服务端确认收到请求
+FriendAccept(36)        B 接受好友请求
+FriendAcceptReturn(37)  返回好友信息给双方
+FriendRemove(38)        解除好友关系
+FriendRemoveReturn(39)  确认解除
+FriendList(40)          请求好友列表
+FriendListReturn(41)    返回好友列表
+FriendOnline(42)        好友上线通知
+```
+
+#### 好友状态机
+
+```
+A 发送请求 → [pending] → B 接受 → [accepted] → 互为好友
+                  ↓ B 拒绝
+              [rejected] → 30 天后清理
+[accepted] → A 或 B 删除 → 行立即删除
+```
+
+#### FriendRepository（直接操作 sqlite3，不经过 Database JSON 抽象层）
+
+```cpp
+class FriendRepository {
+    int64_t sendRequest(int fromUid, int toUid, const std::string& msg);
+    bool acceptRequest(int64_t requestId, int responderUid);
+    bool rejectRequest(int64_t requestId, int responderUid);
+    bool removeFriendship(int uidA, int uidB);
+    std::vector<UserInfo> getFriends(int uid);
+    std::vector<FriendRequest> pendingRequests(int uid);
+    bool areFriends(int uidA, int uidB);
+};
+```
+
+**改动范围**：`protocol/protocol_definitions.json`, `message_types.h`, `message_types.ts`, `protocol/schemas/`(regenerate), `FriendRepository.h/cpp`(new)
+
+**完成标准**：协议类型对齐校验通过，DDL 在空库执行成功。
+
+---
+
+### v1.6.9 — 好友系统：服务端 + 客户端实现
+
+**目标**：端到端好友功能链路。
+
+#### 服务端
+- `MessageRouter` 新增 4 个 handler：`handleFriendRequest`, `handleFriendAccept`, `handleFriendRemove`, `handleFriendList`
+- `broadcastPresence()` 扩展：上线/离线通知仅广播给好友
+- 私聊权限：可选开启"仅好友可私聊"
+
+#### 客户端
+
+| 层面 | 改动 |
+|------|------|
+| chatStore | 新增 `friends[]`, `friendRequests[]`, `sendFriendRequest()`, `respondToRequest()`, `removeFriend()` |
+| handleIncomingMessage | 新增 5 个 case（FriendRequestAck/FriendAcceptReturn/FriendRemoveReturn/FriendListReturn/FriendOnline） |
+| ContactList | 右键菜单 "Add Friend"；好友列表分组（在线/离线/非好友联系人） |
+| App.tsx | 好友请求 toast 通知 + pending badge |
+| GroupChatArea | 可选：群成员右键 "Add Friend" |
+
+**改动范围**：`MessageRouter.h/cpp`, `chatStore.ts`, `ContactList.tsx`, `App.tsx`, `GroupChatArea.tsx`
+
+**完成标准**：A 发送好友请求 → B 收到通知 → B 接受 → 双方好友列表出现对方 → 好友上线通知。
+
+---
+
+### v1.6.10 — 预 v1.7.0 质量门
+
+**目标**：L3 全栈审计 + 集成测试，v1.7.0 标签前的最终验证。
+
+| # | 任务 | 方法 |
+|---|------|------|
+| 1 | 全栈审计 | `codebase-health-audit` 6-pillar |
+| 2 | 构建三连 | `npx tsc --noEmit` + `npm run build` + `cargo check` |
+| 3 | C++ 构建+测试 | `cmake --build` + `ctest` |
+| 4 | 协议对齐 | `node scripts/audit_protocol.mjs` |
+| 5 | 多客户端压力 | `node tests/server_multi_client_smoke.mjs` |
+| 6 | Tauri 桌面 E2E | login→send→AI search→friend→theme toggle |
+| 7 | React Profiler | 帧率 > 55fps |
+| 8 | Bundle 体积 | 与 v1.6.0 基线对比 |
+| 9 | CHANGELOG | 所有 1.6.x 版本变更记录 |
+
+**完成标准**：所有指标达标，打 v1.7.0 标签。
+
+---
+
+## CI/CD 门禁流水线
+
+### L1: Pre-commit（秒级）
+`clang-format --dry-run` | `prettier --check` | `node scripts/generate_protocol.mjs --check` | `grep` 无 console.log/TODO/FIXME
+
+### L2: Pre-PR（分钟级）
+`npx tsc --noEmit` + `npm run build` + `cargo check` + `cmake --build` + `ctest` + `node scripts/audit_protocol.mjs` + bundle ±5%
+
+### L3: 版本质量门（每 0.1 版本）
+codebase-health-audit + Tauri 冒烟 + 压力测试 + 性能回归 + CHANGELOG
+
+### L4: Merge Gate
+L2 + Code Review + 无冲突 + 版本标签对齐
+
+### 版本 → 门禁映射
+
+| 版本范围 | 触发 |
+|----------|------|
+| v1.6.1–v1.6.4 | L1 per-commit, L2 per-version |
+| v1.6.5 | L1 + L2 + DB migration 回滚测试 |
+| v1.6.6–v1.6.7 | L1 + L2 + AI 响应格式校验 |
+| v1.6.8–v1.6.9 | L1 + L2 + 好友状态机测试 |
+| v1.6.10 | L1 + L2 + **L3** 全量 |
+| v1.7.0 | **L4** Merge Gate |
+
+### 工具链脚本
+
+```
+scripts/gates/
+├── pre-commit.ps1         # L1
+├── pre-pr.ps1             # L2
+├── quality-gate.ps1       # L3
+└── db-migration-test.ps1  # 数据库迁移回滚
+```
 
 ---
 

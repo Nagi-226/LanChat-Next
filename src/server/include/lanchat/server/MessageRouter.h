@@ -4,6 +4,7 @@
 #include "ProtocolJson.h"
 #include "SessionPool.h"
 #include "db/ChannelRepository.h"
+#include "db/FriendRepository.h"
 #include "db/MessageRepository.h"
 #include "db/UserRepository.h"
 
@@ -18,7 +19,8 @@ public:
                   PresenceManager& presence,
                   db::UserRepository& users,
                   db::MessageRepository& messages,
-                  db::ChannelRepository& channels);
+                  db::ChannelRepository& channels,
+                  db::FriendRepository& friends);
 
     void route(const std::shared_ptr<AsyncSession>& session, const std::string& json);
 
@@ -47,6 +49,14 @@ private:
                          const protocol_json::Object& request);
     void handleProfileUpdate(const std::shared_ptr<AsyncSession>& session,
                              const protocol_json::Object& request);
+    void handleFriendRequest(const std::shared_ptr<AsyncSession>& session,
+                             const protocol_json::Object& request);
+    void handleFriendAccept(const std::shared_ptr<AsyncSession>& session,
+                            const protocol_json::Object& request);
+    void handleFriendRemove(const std::shared_ptr<AsyncSession>& session,
+                            const protocol_json::Object& request);
+    void handleFriendList(const std::shared_ptr<AsyncSession>& session,
+                          const protocol_json::Object& request);
 
     void deliverOffline(const std::shared_ptr<AsyncSession>& session, int userId);
     void broadcastPresence(lanchat::protocol::MsgType type, int userId);
@@ -59,6 +69,7 @@ private:
     db::UserRepository& users_;
     db::MessageRepository& messages_;
     db::ChannelRepository& channels_;
+    db::FriendRepository& friends_;
 };
 
 } // namespace lanchat::server

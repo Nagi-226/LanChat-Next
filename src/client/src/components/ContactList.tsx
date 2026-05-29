@@ -5,6 +5,7 @@ import BorderGlow from '../lib/BorderGlow';
 import Counter from '../lib/Counter';
 import FadeContent from '../lib/FadeContent';
 import { getInitials } from '../lib/utils';
+import { useChatStore } from '../stores/chatStore';
 
 export interface Contact {
   id: number;
@@ -52,11 +53,20 @@ interface ContactRowProps {
 }
 
 const ContactRow = memo(function ContactRow({ contact, active, onSelect }: ContactRowProps) {
+  const friends = useChatStore((s) => s.friends);
+  const sendFriendRequest = useChatStore((s) => s.sendFriendRequest);
+  const removeFriend = useChatStore((s) => s.removeFriend);
+  const isFriend = friends.some((friend) => friend.id === contact.id);
+
   return (
-    <motion.button
-      type="button"
+    <motion.div
+      role="button"
+      tabIndex={0}
       layout
       onClick={() => onSelect(contact.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') onSelect(contact.id);
+      }}
       whileHover={{ x: 2 }}
       whileTap={{ scale: 0.99 }}
       className={`relative flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -100,7 +110,72 @@ const ContactRow = memo(function ContactRow({ contact, active, onSelect }: Conta
           <Counter value={contact.unread > 99 ? 99 : contact.unread} className="leading-none" />{contact.unread > 99 ? '+' : ''}
         </span>
       )}
-    </motion.button>
+      {isFriend ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            void removeFriend(contact.id);
+          }}
+          className="rounded bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-500 opacity-70 hover:bg-red-500/20 hover:opacity-100 dark:text-red-300"
+        >
+          Remove
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            void sendFriendRequest(contact.id, 'Hi, let us connect.');
+          }}
+          className="rounded bg-dark-highlight/10 px-2 py-1 text-[10px] font-semibold text-dark-highlight hover:bg-dark-highlight/20"
+        >
+          Add
+        </button>
+      )}
+    </motion.div>
+  );
+});
+
+interface FriendRequestRowProps {
+  request: { id: number; nickname: string; headId?: number; msg?: string };
+}
+
+const FriendRequestRow = memo(function FriendRequestRow({ request }: FriendRequestRowProps) {
+  const respondToRequest = useChatStore((s) => s.respondToRequest);
+
+  return (
+    <div className="mx-3 mb-2 rounded-xl border border-dark-highlight/20 bg-dark-highlight/10 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-dark-accent text-xs text-dark-text">
+          {getInitials(request.nickname)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-semibold text-light-text dark:text-dark-text">
+            {request.nickname}
+          </div>
+          <div className="truncate text-[10px] text-light-muted dark:text-dark-muted">
+            {request.msg || `User #${request.id} wants to connect`}
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => void respondToRequest(request.id, true)}
+          className="rounded-md bg-dark-highlight px-2 py-1.5 text-[10px] font-semibold text-white"
+        >
+          Accept
+        </button>
+        <button
+          type="button"
+          onClick={() => void respondToRequest(request.id, false)}
+          className="rounded-md border border-light-border px-2 py-1.5 text-[10px] font-semibold text-light-muted hover:border-red-400 hover:text-red-500 dark:border-dark-border dark:text-dark-muted"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
   );
 });
 
@@ -170,6 +245,7 @@ export function ContactList({ contacts, groups = [], selectedId, selectedGroupId
   const normalizedQuery = query.trim().toLowerCase();
   const onlineCount = contacts.filter((contact) => contact.status === 'online').length;
   const unreadCount = contacts.reduce((total, contact) => total + contact.unread, 0);
+  const allContactsOffline = contacts.length > 0 && onlineCount === 0;
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -195,6 +271,17 @@ export function ContactList({ contacts, groups = [], selectedId, selectedGroupId
   }, [groups, normalizedQuery]);
 
   const hasSearch = normalizedQuery.length > 0;
+  const friends = useChatStore((s) => s.friends);
+  const friendRequests = useChatStore((s) => s.friendRequests);
+  const friendIds = new Set(friends.map((friend) => friend.id));
+  const onlineFriends = filteredContacts.filter((contact) => friendIds.has(contact.id) && contact.status === 'online');
+  const offlineFriends = filteredContacts.filter((contact) => friendIds.has(contact.id) && contact.status !== 'online');
+  const nonFriends = filteredContacts.filter((contact) => !friendIds.has(contact.id));
+  const contactSections = [
+    { label: 'Online friends', items: onlineFriends },
+    { label: 'Offline friends', items: offlineFriends },
+    { label: 'Other contacts', items: nonFriends },
+  ].filter((section) => section.items.length > 0);
 
   return (
     <aside className="flex h-full w-sidebar flex-shrink-0 flex-col border-r border-light-border bg-light-sidebar dark:border-dark-border dark:bg-dark-sidebar">
@@ -228,6 +315,11 @@ export function ContactList({ contacts, groups = [], selectedId, selectedGroupId
           placeholder="Search name or ID"
           className="w-full rounded-lg border border-light-border bg-white px-3 py-2 text-xs text-light-text placeholder-light-muted outline-none transition-colors focus:border-dark-highlight dark:border-dark-border dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted"
         />
+        {allContactsOffline && (
+          <div className="mt-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200">
+            All contacts are offline. Messages can be drafted, but delivery waits for reconnection.
+          </div>
+        )}
       </div>
 
       <div
@@ -249,34 +341,51 @@ export function ContactList({ contacts, groups = [], selectedId, selectedGroupId
                   {hasSearch ? 'No contacts match your search' : 'No contacts yet'}
                 </p>
               )}
+              {friendRequests.length > 0 && !hasSearch && (
+                <div className="mb-2">
+                  <div className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-dark-highlight">
+                    Friend requests ({friendRequests.length})
+                  </div>
+                  {friendRequests.map((request) => (
+                    <FriendRequestRow key={`request-${request.id}`} request={request} />
+                  ))}
+                </div>
+              )}
               <AnimatePresence initial={false} mode="popLayout">
-                {filteredContacts.map((contact) => {
-                  const active = contact.id === selectedId && selectedGroupId === null;
-                  const row = <ContactRow contact={contact} active={active} onSelect={onSelect} />;
-                  const wrapped = (
-                    <FadeContent duration={0.24} threshold={0.01}>
-                      {row}
-                    </FadeContent>
-                  );
-                  const content = active ? (
-                    <BorderGlow borderRadius={0} glowRadius={20} glowIntensity={0.6} animated>
-                      {wrapped}
-                    </BorderGlow>
-                  ) : (
-                    wrapped
-                  );
-                  return (
-                    <motion.div
-                      key={`contact-${contact.id}`}
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8, transition: { duration: 0.12, ease: 'easeIn' } }}
-                    >
-                      {content}
-                    </motion.div>
-                  );
-                })}
+                {contactSections.map((section) => (
+                  <div key={section.label}>
+                    <div className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-light-muted dark:text-dark-muted">
+                      {section.label}
+                    </div>
+                    {section.items.map((contact) => {
+                      const active = contact.id === selectedId && selectedGroupId === null;
+                      const row = <ContactRow contact={contact} active={active} onSelect={onSelect} />;
+                      const wrapped = (
+                        <FadeContent duration={0.24} threshold={0.01}>
+                          {row}
+                        </FadeContent>
+                      );
+                      const content = active ? (
+                        <BorderGlow borderRadius={0} glowRadius={20} glowIntensity={0.6} animated>
+                          {wrapped}
+                        </BorderGlow>
+                      ) : (
+                        wrapped
+                      );
+                      return (
+                        <motion.div
+                          key={`contact-${contact.id}`}
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8, transition: { duration: 0.12, ease: 'easeIn' } }}
+                        >
+                          {content}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ))}
               </AnimatePresence>
 
               <div className="mt-2 border-t border-light-border pt-2 dark:border-dark-border">
@@ -284,9 +393,9 @@ export function ContactList({ contacts, groups = [], selectedId, selectedGroupId
                   Groups
                 </div>
                 {filteredGroups.length === 0 && (
-                  <p className="px-4 py-3 text-xs text-light-muted dark:text-dark-muted">
-                    {hasSearch ? 'No groups match your search' : 'No joined groups'}
-                  </p>
+                  <div className="mx-3 rounded-lg border border-dashed border-light-border px-3 py-4 text-xs text-light-muted dark:border-dark-border dark:text-dark-muted">
+                    {hasSearch ? 'No groups match your search' : 'No joined groups yet. Create or join a group to start a team room.'}
+                  </div>
                 )}
                 <AnimatePresence initial={false} mode="popLayout">
                   {filteredGroups.map((group) => {

@@ -1,11 +1,31 @@
 #include "lanchat/server/db/UserRepository.h"
 
+#include "lanchat_bcrypt.hpp"
 #include "sha256.hpp"
 
 #include <algorithm>
 #include <ctime>
 
 namespace lanchat::server::db {
+
+namespace {
+
+int passwordVersion(const Row& row) {
+    auto it = row.find("password_version");
+    if (it == row.end() || !it->second.is_number()) return 0;
+    return static_cast<int>(it->second.as_int());
+}
+
+UserInfo userFromRow(const Row& r) {
+    UserInfo u;
+    u.id = static_cast<int>(r.at("id").as_int());
+    u.password = r.at("password_hash").as_string();
+    u.nickname = r.at("nickname").as_string();
+    u.avatar_id = static_cast<int>(r.at("avatar_id").as_int());
+    return u;
+}
+
+} // namespace
 
 UserRepository::UserRepository(Database& db) : db_(db) {
     db_.ensureTable("users");
@@ -17,13 +37,7 @@ std::optional<UserInfo> UserRepository::findById(int id) {
     });
     if (rows.empty()) return std::nullopt;
 
-    const auto& r = rows[0];
-    UserInfo u;
-    u.id = static_cast<int>(r.at("id").as_int());
-    u.password = r.at("password_hash").as_string();
-    u.nickname = r.at("nickname").as_string();
-    u.avatar_id = static_cast<int>(r.at("avatar_id").as_int());
-    return u;
+    return userFromRow(rows[0]);
 }
 
 std::optional<UserInfo> UserRepository::findByNickname(const std::string& nickname) {
@@ -32,13 +46,7 @@ std::optional<UserInfo> UserRepository::findByNickname(const std::string& nickna
     });
     if (rows.empty()) return std::nullopt;
 
-    const auto& r = rows[0];
-    UserInfo u;
-    u.id = static_cast<int>(r.at("id").as_int());
-    u.password = r.at("password_hash").as_string();
-    u.nickname = r.at("nickname").as_string();
-    u.avatar_id = static_cast<int>(r.at("avatar_id").as_int());
-    return u;
+    return userFromRow(rows[0]);
 }
 
 int UserRepository::create(const std::string& password, const std::string& nickname,
@@ -57,7 +65,8 @@ int UserRepository::create(const std::string& password, const std::string& nickn
 
     Row row;
     row["id"] = vendor::json::Value(static_cast<int64_t>(maxId));
-    row["password_hash"] = vendor::json::Value(vendor::crypto::make_hash(password));
+    row["password_hash"] = vendor::json::Value(vendor::bcrypt::hash_password(password, 12));
+    row["password_version"] = vendor::json::Value(static_cast<int64_t>(1));
     row["nickname"] = vendor::json::Value(nickname);
     row["avatar_id"] = vendor::json::Value(static_cast<int64_t>(avatarId));
     row["created_at"] = vendor::json::Value(static_cast<int64_t>(std::time(nullptr)));
@@ -69,9 +78,31 @@ int UserRepository::create(const std::string& password, const std::string& nickn
 }
 
 bool UserRepository::verifyPassword(int userId, const std::string& password) {
-    auto user = findById(userId);
-    if (!user.has_value()) return false;
-    return vendor::crypto::verify_hash(password, user->password);
+    auto rows = db_.query("users", [userId](const Row& r) {
+        return r.at("id").as_int() == userId;
+    });
+    if (rows.empty()) return false;
+
+    const auto& row = rows[0];
+    const std::string stored = row.at("password_hash").as_string();
+    const int version = passwordVersion(row);
+
+    if (version >= 1) {
+        return vendor::bcrypt::verify_password(password, stored);
+    }
+
+    if (!vendor::crypto::verify_hash(password, stored)) {
+        return false;
+    }
+
+    const std::string upgraded = vendor::bcrypt::hash_password(password, 12);
+    db_.update("users", [userId](const Row& r) {
+        return r.at("id").as_int() == userId;
+    }, [&upgraded](Row& r) {
+        r["password_hash"] = vendor::json::Value(upgraded);
+        r["password_version"] = vendor::json::Value(static_cast<int64_t>(1));
+    });
+    return true;
 }
 
 bool UserRepository::updateProfile(int userId, const std::string& nickname, int avatarId) {
@@ -101,12 +132,7 @@ std::vector<UserInfo> UserRepository::getAllUsers() {
     std::vector<UserInfo> result;
     auto rows = db_.query("users");
     for (const auto& r : rows) {
-        UserInfo u;
-        u.id = static_cast<int>(r.at("id").as_int());
-        u.password = r.at("password_hash").as_string();
-        u.nickname = r.at("nickname").as_string();
-        u.avatar_id = static_cast<int>(r.at("avatar_id").as_int());
-        result.push_back(u);
+        result.push_back(userFromRow(r));
     }
     return result;
 }

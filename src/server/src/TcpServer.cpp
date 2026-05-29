@@ -2,6 +2,7 @@
 
 #include "lanchat/server/ServerLogger.h"
 #include "lanchat/server/db/ChannelRepository.h"
+#include "lanchat/server/db/FriendRepository.h"
 #include "lanchat/server/db/MessageRepository.h"
 #include "lanchat/server/db/UserRepository.h"
 
@@ -14,10 +15,11 @@ TcpServer::TcpServer(std::uint16_t port,
                      db::UserRepository& users,
                      db::MessageRepository& messages,
                      db::ChannelRepository& channels,
+                     db::FriendRepository& friends,
                      std::size_t maxConnections)
     : port_(port),
       sessions_(maxConnections),
-      router_(sessions_, presence_, users, messages, channels),
+      router_(sessions_, presence_, users, messages, channels, friends),
       users_(users) {}
 
 TcpServer::~TcpServer() {

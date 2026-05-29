@@ -6,7 +6,7 @@ namespace lanchat::server {
 
 std::vector<std::uint8_t> FrameCodec::encode(const std::string& json)
 {
-    if (json.size() > 4 * 1024 * 1024) {
+    if (json.size() > MaxFrameBytes) {
         throw std::runtime_error("frame too large");
     }
 
@@ -33,10 +33,10 @@ bool FrameCodec::tryDecode(std::vector<std::uint8_t>& buffer, std::string& outJs
         (static_cast<std::uint32_t>(buffer[2]) << 8) |
         static_cast<std::uint32_t>(buffer[3]);
 
-    if (len == 0 || len > 4 * 1024 * 1024) {
+    if (len == 0 || len > MaxFrameBytes) {
         buffer.clear();
-        outJson = R"({"type":33,"status":"error","code":400,"msg":"invalid frame"})";
-        return true;
+        outJson.clear();
+        return false;
     }
 
     if (buffer.size() < 4 + len) {

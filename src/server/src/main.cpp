@@ -28,7 +28,14 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
             int p = std::atoi(argv[++i]);
-            if (p > 0 && p <= 65535) port = static_cast<uint16_t>(p);
+            if (p <= 0 || p >= 65535) {
+                std::cerr << "Invalid port: " << p << " (expected 1-65534)\n";
+                return 2;
+            }
+            if (p < 1024) {
+                std::cerr << "Warning: port " << p << " is privileged on some systems\n";
+            }
+            port = static_cast<uint16_t>(p);
         }
         if (std::strcmp(argv[i], "--data") == 0 && i + 1 < argc) {
             dataDir = argv[++i];

@@ -1,10 +1,10 @@
 ﻿{
-  "version": "1.1.5",
+  "version": "1.2.0",
   "schemaDraft": "https://json-schema.org/draft/2020-12/schema",
   "schemaBaseId": "https://lanchat-next.local/protocol/schemas/",
   "commonFields": ["timestamp", "msg_id"],
   "fields": {
-    "type": { "schema": { "type": "integer", "minimum": 0, "maximum": 33 }, "ts": "MsgType" },
+    "type": { "schema": { "type": "integer", "minimum": 0, "maximum": 42 }, "ts": "MsgType" },
     "timestamp": { "schema": { "type": "integer", "minimum": 0 }, "ts": "number" },
     "msg_id": { "schema": { "type": "string", "minLength": 1, "maxLength": 128 }, "ts": "string" },
     "id": { "schema": { "type": "integer", "minimum": 1 }, "ts": "number" },
@@ -36,7 +36,9 @@
     "file_hash": { "schema": { "type": "string", "minLength": 1, "maxLength": 128 }, "ts": "string" },
     "limit": { "schema": { "type": "integer", "minimum": 1, "maximum": 200 }, "ts": "number" },
     "cursor": { "schema": { "type": "string", "maxLength": 256 }, "ts": "string" },
-    "has_more": { "schema": { "type": "boolean" }, "ts": "boolean" }
+    "has_more": { "schema": { "type": "boolean" }, "ts": "boolean" },
+    "requestId": { "schema": { "type": "string", "minLength": 1, "maxLength": 128 }, "ts": "string" },
+    "friendId": { "schema": { "type": "integer", "minimum": 1 }, "ts": "number" }
   },
   "messages": [
     { "name": "RegisterUser", "schemaName": "registerUser", "value": 0, "required": ["password", "nickname"], "optional": ["headId"] },
@@ -72,6 +74,15 @@
     { "name": "AIResponse", "schemaName": "aiResponse", "value": 30, "required": ["request_id", "status"], "optional": ["msg", "code"] },
     { "name": "AIStreamChunk", "schemaName": "aiStreamChunk", "value": 31, "required": ["request_id", "chunk_index", "is_final", "msg"], "optional": [] },
     { "name": "UserProfileUpdate", "schemaName": "userProfileUpdate", "value": 32, "required": ["id"], "optional": ["nickname", "headId"], "anyOf": [["nickname"], ["headId"]] },
-    { "name": "SystemBroadcast", "schemaName": "systemBroadcast", "value": 33, "required": ["msg"], "optional": ["content_type", "status", "code"] }
+    { "name": "SystemBroadcast", "schemaName": "systemBroadcast", "value": 33, "required": ["msg"], "optional": ["content_type", "status", "code"] },
+    { "name": "FriendRequest", "schemaName": "friendRequest", "value": 34, "required": ["fromId", "toId"], "optional": ["msg"] },
+    { "name": "FriendRequestAck", "schemaName": "friendRequestAck", "value": 35, "required": ["requestId", "status"], "optional": ["msg", "code"] },
+    { "name": "FriendAccept", "schemaName": "friendAccept", "value": 36, "required": ["fromId", "toId"], "optional": [] },
+    { "name": "FriendAcceptReturn", "schemaName": "friendAcceptReturn", "value": 37, "required": ["status", "friendId"], "optional": ["nickname", "headId", "msg", "code"] },
+    { "name": "FriendRemove", "schemaName": "friendRemove", "value": 38, "required": ["fromId", "toId"], "optional": [] },
+    { "name": "FriendRemoveReturn", "schemaName": "friendRemoveReturn", "value": 39, "required": ["status"], "optional": ["friendId", "msg", "code"] },
+    { "name": "FriendList", "schemaName": "friendList", "value": 40, "required": ["id"], "optional": [] },
+    { "name": "FriendListReturn", "schemaName": "friendListReturn", "value": 41, "required": ["friends"], "optional": [] },
+    { "name": "FriendOnline", "schemaName": "friendOnline", "value": 42, "required": ["friendId", "status"], "optional": ["nickname", "headId"] }
   ]
 }

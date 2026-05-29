@@ -19,7 +19,7 @@ void assertSetOnlineDefaultStatus() {
     PresenceManager pm;
     pm.setOnline(1);
     assert(pm.isOnline(1));
-    assert(pm.status(1) == "ok");
+    assert(pm.status(1) == "online");
 }
 
 void assertSetOnlineCustomStatus() {

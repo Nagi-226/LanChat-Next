@@ -14,6 +14,7 @@ namespace lanchat::server {
 
 namespace db {
 class ChannelRepository;
+class FriendRepository;
 class MessageRepository;
 class UserRepository;
 }
@@ -24,6 +25,7 @@ public:
               db::UserRepository& users,
               db::MessageRepository& messages,
               db::ChannelRepository& channels,
+              db::FriendRepository& friends,
               std::size_t maxConnections = 500);
     ~TcpServer();
 

@@ -40,6 +40,7 @@ private:
     void doRead();
     void doWrite();
     void onMessage(const std::string& json);
+    bool consumeRateLimitToken();
 
     vendor::asio::io_context& ctx_;
     TcpServer& server_;
@@ -54,7 +55,9 @@ private:
     bool writing_ = false;
 
     std::chrono::steady_clock::time_point last_heartbeat_;
+    std::chrono::steady_clock::time_point rate_window_start_;
     int missed_heartbeats_ = 0;
+    int messages_this_window_ = 0;
 
     static std::atomic<uint64_t> next_id_;
 };

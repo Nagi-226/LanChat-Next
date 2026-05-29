@@ -19,9 +19,9 @@ namespace lanchat {
 namespace protocol {
 
 // ============================================================
-// Message Type Enum (34 types)
+// Message Type Enum (43 types)
 // Types 0-19:  Legacy compatible (original graduation project)
-// Types 20-33: New for LanChat-Next
+// Types 20-42: New for LanChat-Next
 // ============================================================
 enum class MsgType : int {
     // --- Auth (0-4) ---
@@ -80,7 +80,18 @@ enum class MsgType : int {
 
     // --- Profile & Admin (32-33) ---
     UserProfileUpdate  = 32,  // Client  Server: update nickname/avatar
-    SystemBroadcast    = 33   // Server  Client: admin broadcast message
+    SystemBroadcast    = 33,  // Server  Client: admin broadcast message
+
+    // --- Friend System (34-42) ---
+    FriendRequest      = 34,  // Client  Server: request friendship
+    FriendRequestAck   = 35,  // Server  Client: request received/result
+    FriendAccept       = 36,  // Client  Server: accept friendship
+    FriendAcceptReturn = 37,  // Server  Client: friendship accepted
+    FriendRemove       = 38,  // Client  Server: remove friendship
+    FriendRemoveReturn = 39,  // Server  Client: removal result
+    FriendList         = 40,  // Client  Server: request friend list
+    FriendListReturn   = 41,  // Server  Client: friend list
+    FriendOnline       = 42   // Server  Client: friend presence update
 };
 
 // ============================================================
@@ -135,6 +146,11 @@ namespace field {
     constexpr const char* IS_FINAL   = "is_final";
     constexpr const char* STATUS     = "status";
 
+    // Friend
+    constexpr const char* REQUEST_MSG = "request_msg";
+    constexpr const char* FRIEND_REQUEST_ID = "requestId";
+    constexpr const char* FRIEND_ID = "friendId";
+
     // File
     constexpr const char* FILE_NAME  = "file_name";
     constexpr const char* FILE_SIZE  = "file_size";
@@ -166,11 +182,11 @@ namespace ai_type {
 // ============================================================
 inline int toInt(MsgType t) { return static_cast<int>(t); }
 inline MsgType fromInt(int v) {
-    if (v >= 0 && v <= 33) return static_cast<MsgType>(v);
+    if (v >= 0 && v <= 42) return static_cast<MsgType>(v);
     return static_cast<MsgType>(-1); // invalid
 }
 inline bool isLegacyType(MsgType t) { return static_cast<int>(t) <= 19; }
-inline bool isValidType(MsgType t) { return static_cast<int>(t) >= 0 && static_cast<int>(t) <= 33; }
+inline bool isValidType(MsgType t) { return static_cast<int>(t) >= 0 && static_cast<int>(t) <= 42; }
 
 } // namespace protocol
 } // namespace lanchat

@@ -3,6 +3,7 @@
 #include "lanchat/server/ServerLogger.h"
 
 #include <algorithm>
+#include <sstream>
 
 namespace lanchat::server {
 
@@ -28,6 +29,10 @@ Object groupToJson(const db::ChannelInfo& group) {
     obj["name"] = Value(group.name);
     obj["hostId"] = Value(group.host_id);
     return obj;
+}
+
+Object friendToJson(const lanchat::protocol::UserInfo& user, const std::string& status) {
+    return userToJson(user, status);
 }
 
 Object messageToJson(MsgType type, const db::StoredMessage& message) {
@@ -58,18 +63,58 @@ Array messagesToArray(const std::vector<db::StoredMessage>& messages) {
     return arr;
 }
 
+std::string summarizeMessages(const std::vector<db::StoredMessage>& messages) {
+    if (messages.empty()) {
+        return "No recent messages are available for this conversation.";
+    }
+    std::stringstream ss;
+    ss << "Summary based on " << messages.size() << " recent messages.\n";
+    ss << "- Time span: " << messages.front().timestamp << " to " << messages.back().timestamp << ".\n";
+    ss << "- Latest topic: " << messages.back().content.substr(0, 180) << "\n";
+    if (messages.size() > 1) {
+        ss << "- Earlier context: " << messages.front().content.substr(0, 160) << "\n";
+    }
+    ss << "- Suggested follow-up: review unresolved asks and confirm owners in chat.";
+    return ss.str();
+}
+
+void deliverSummaryChunks(
+    const std::shared_ptr<AsyncSession>& session,
+    const std::string& requestId,
+    const std::string& summary) {
+    Object start;
+    start["type"] = Value(lanchat::protocol::toInt(MsgType::AIResponse));
+    start["request_id"] = Value(requestId);
+    start["status"] = Value("start");
+    session->deliver(protocol_json::serialize(start));
+
+    constexpr size_t chunkSize = 80;
+    int chunkIndex = 0;
+    for (size_t offset = 0; offset < summary.size(); offset += chunkSize) {
+        Object chunk;
+        chunk["type"] = Value(lanchat::protocol::toInt(MsgType::AIStreamChunk));
+        chunk["request_id"] = Value(requestId);
+        chunk["chunk_index"] = Value(chunkIndex++);
+        chunk["is_final"] = Value(offset + chunkSize >= summary.size());
+        chunk["msg"] = Value(summary.substr(offset, chunkSize));
+        session->deliver(protocol_json::serialize(chunk));
+    }
+}
+
 } // namespace
 
 MessageRouter::MessageRouter(SessionPool& sessions,
                              PresenceManager& presence,
                              db::UserRepository& users,
                              db::MessageRepository& messages,
-                             db::ChannelRepository& channels)
+                             db::ChannelRepository& channels,
+                             db::FriendRepository& friends)
     : sessions_(sessions),
       presence_(presence),
       users_(users),
       messages_(messages),
-      channels_(channels) {}
+      channels_(channels),
+      friends_(friends) {}
 
 void MessageRouter::route(const std::shared_ptr<AsyncSession>& session, const std::string& json) {
     bool ok = false;
@@ -92,6 +137,10 @@ void MessageRouter::route(const std::shared_ptr<AsyncSession>& session, const st
         case MsgType::RequestHistory:     handleHistory(session, request); break;
         case MsgType::AIRequest:          handleAIRequest(session, request); break;
         case MsgType::UserProfileUpdate:  handleProfileUpdate(session, request); break;
+        case MsgType::FriendRequest:      handleFriendRequest(session, request); break;
+        case MsgType::FriendAccept:       handleFriendAccept(session, request); break;
+        case MsgType::FriendRemove:       handleFriendRemove(session, request); break;
+        case MsgType::FriendList:         handleFriendList(session, request); break;
         default:
             session->deliver(protocol_json::ok(
                 MsgType::SystemBroadcast,
@@ -156,6 +205,11 @@ void MessageRouter::handleLogin(
         users.push_back(Value(userToJson(knownUser, presence_.status(knownUser.id))));
     }
 
+    Array friends;
+    for (const auto& friendUser : friends_.getFriends(uid)) {
+        friends.push_back(Value(friendToJson(friendUser, presence_.status(friendUser.id))));
+    }
+
     Array groups;
     for (const auto& group : channels_.groupsForUser(uid)) {
         groups.push_back(Value(groupToJson(group)));
@@ -166,7 +220,7 @@ void MessageRouter::handleLogin(
     response["id"] = Value(uid);
     response["nickname"] = Value(user->nickname);
     response["headId"] = Value(user->avatar_id);
-    response["friends"] = Value(users);
+    response["friends"] = Value(friends);
     response["users"] = Value(users);
     response["groups"] = Value(groups);
     session->deliver(protocol_json::serialize(response));
@@ -336,9 +390,26 @@ void MessageRouter::handleAIRequest(
     const std::string requestId = protocol_json::stringField(request, "request_id", "search");
     const std::string aiType = protocol_json::stringField(request, "ai_type");
     const std::string query = protocol_json::stringField(request, "msg");
+    if (aiType == "summarize") {
+        const int userId = authenticatedUserId(session, request, "id");
+        std::vector<db::StoredMessage> history;
+        try {
+            if (query.rfind("group:", 0) == 0) {
+                history = messages_.groupHistory(std::stoi(query.substr(6)), 50);
+            } else if (query.rfind("direct:", 0) == 0 && userId > 0) {
+                history = messages_.privateHistory(userId, std::stoi(query.substr(7)), 50);
+            }
+        } catch (...) {
+            session->deliver(protocol_json::error(MsgType::AIResponse, 400, "invalid summarize target"));
+            return;
+        }
+        deliverSummaryChunks(session, requestId, summarizeMessages(history));
+        return;
+    }
+
     if (aiType != "search") {
         session->deliver(protocol_json::error(
-            MsgType::AIResponse, 501, "only local search is available in v1.2.x"));
+            MsgType::AIResponse, 501, "unsupported AI request type"));
         return;
     }
 
@@ -352,6 +423,116 @@ void MessageRouter::handleAIRequest(
     response["request_id"] = Value(requestId);
     response["status"] = Value("done");
     response["msg"] = Value(protocol_json::serialize(searchPayload));
+    session->deliver(protocol_json::serialize(response));
+}
+
+void MessageRouter::handleFriendRequest(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    const int toId = protocol_json::intField(request, "toId");
+    const std::string msg = protocol_json::stringField(request, "msg");
+
+    Object ack;
+    ack["type"] = Value(lanchat::protocol::toInt(MsgType::FriendRequestAck));
+    ack["requestId"] = Value(std::to_string(fromId) + ":" + std::to_string(toId));
+    if (fromId <= 0 || toId <= 0 || !friends_.sendRequest(fromId, toId, msg)) {
+        ack["status"] = Value("error");
+        ack["msg"] = Value("friend request failed");
+        ack["code"] = Value(400);
+        session->deliver(protocol_json::serialize(ack));
+        return;
+    }
+
+    ack["status"] = Value("ok");
+    ack["msg"] = Value("request sent");
+    session->deliver(protocol_json::serialize(ack));
+
+    if (auto target = sessions_.findByUserId(toId)) {
+        Object notify;
+        notify["type"] = Value(lanchat::protocol::toInt(MsgType::FriendRequest));
+        notify["fromId"] = Value(fromId);
+        notify["toId"] = Value(toId);
+        notify["msg"] = Value(msg);
+        target->deliver(protocol_json::serialize(notify));
+    }
+}
+
+void MessageRouter::handleFriendAccept(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int toId = authenticatedUserId(session, request, "toId");
+    const int fromId = protocol_json::intField(request, "fromId");
+    const bool ok = fromId > 0 && toId > 0 && friends_.acceptRequest(fromId, toId);
+    auto fromUser = users_.findById(fromId);
+    auto toUser = users_.findById(toId);
+
+    auto deliverAccepted = [&](const std::shared_ptr<AsyncSession>& target, int friendId, const protocol::UserInfo* friendUser) {
+        if (!target) return;
+        Object response;
+        response["type"] = Value(lanchat::protocol::toInt(MsgType::FriendAcceptReturn));
+        response["status"] = Value(ok ? "ok" : "error");
+        response["friendId"] = Value(friendId);
+        if (friendUser) {
+            response["nickname"] = Value(friendUser->nickname);
+            response["headId"] = Value(friendUser->avatar_id);
+        }
+        if (!ok) {
+            response["msg"] = Value("accept failed");
+            response["code"] = Value(400);
+        }
+        target->deliver(protocol_json::serialize(response));
+    };
+
+    deliverAccepted(session, fromId, fromUser ? &*fromUser : nullptr);
+    deliverAccepted(sessions_.findByUserId(fromId), toId, toUser ? &*toUser : nullptr);
+}
+
+void MessageRouter::handleFriendRemove(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int uid = session && session->authenticated() ? session->userId() : 0;
+    const int fromId = protocol_json::intField(request, "fromId");
+    const int toId = protocol_json::intField(request, "toId");
+    const int friendId = uid == fromId ? toId : fromId;
+    bool rejectedPending = false;
+    bool ok = false;
+    if (uid > 0 && fromId > 0 && toId > 0) {
+        rejectedPending = uid == toId && friends_.rejectRequest(fromId, toId);
+        ok = rejectedPending || friends_.removeFriendship(fromId, toId);
+    }
+
+    auto deliverRemoved = [&](const std::shared_ptr<AsyncSession>& target, int removedId, bool notifyReject) {
+        if (!target) return;
+        Object response;
+        response["type"] = Value(lanchat::protocol::toInt(MsgType::FriendRemoveReturn));
+        response["status"] = Value(ok ? "ok" : "error");
+        response["friendId"] = Value(removedId);
+        if (notifyReject && rejectedPending) {
+            response["msg"] = Value("request rejected");
+        }
+        if (!ok) {
+            response["msg"] = Value("remove failed");
+            response["code"] = Value(400);
+        }
+        target->deliver(protocol_json::serialize(response));
+    };
+
+    deliverRemoved(session, friendId, true);
+    deliverRemoved(sessions_.findByUserId(friendId), uid, rejectedPending);
+}
+
+void MessageRouter::handleFriendList(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int uid = authenticatedUserId(session, request, "id");
+    Array friends;
+    for (const auto& user : friends_.getFriends(uid)) {
+        friends.push_back(Value(friendToJson(user, presence_.status(user.id))));
+    }
+    Object response;
+    response["type"] = Value(lanchat::protocol::toInt(MsgType::FriendListReturn));
+    response["friends"] = Value(friends);
     session->deliver(protocol_json::serialize(response));
 }
 
@@ -390,13 +571,16 @@ void MessageRouter::broadcastPresence(MsgType type, int userId) {
     if (!user) {
         return;
     }
-    Object payload = userToJson(*user, type == MsgType::UserOnline ? "online" : "offline");
-    payload["type"] = Value(lanchat::protocol::toInt(type));
+    Object payload;
+    payload["type"] = Value(lanchat::protocol::toInt(MsgType::FriendOnline));
+    payload["friendId"] = Value(userId);
+    payload["status"] = Value(type == MsgType::UserOnline ? "ok" : "failed");
+    payload["nickname"] = Value(user->nickname);
+    payload["headId"] = Value(user->avatar_id);
     auto json = protocol_json::serialize(payload);
-    for (const auto& session : sessions_.all()) {
-        if (session && session->userId() != userId) {
-            session->deliver(json);
-        }
+    for (const auto& friendUser : friends_.getFriends(userId)) {
+        auto target = sessions_.findByUserId(friendUser.id);
+        if (target) target->deliver(json);
     }
 }
 

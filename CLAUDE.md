@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Last updated: 2026-05-26
+> Last updated: 2026-05-29
 
 ## Project Identity
 
@@ -196,12 +196,15 @@ All `Backgrounds/*` (full-page WebGL/Canvas, inappropriate for chat window). All
 
 ## Current Version State
 
-- **Latest checkpoint**: v1.6.0 — React Bits Phase 1–4 animation integration complete. 2026-05-26 full-stack audit completed: 3 P0 + 4 P1 + 3 P2 issues found and fixed.
-- **Next**: v1.6.1–v1.6.5 → v1.7.0 (AI Assistant Panel + Friend System). See CODEX.md for per-version breakdown.
-- **Server**: TcpServer + AsyncSession (stabilized), Database + UserRepository + LegacyMigrator, SessionPool, PresenceManager, MessageRouter, MessageRepository, and ChannelRepository are wired for smoke-level routing/persistence. v1.6.3 scheduled for server hardening pass.
-- **Client**: Phase 1–4 React Bits complete. v1.6.1–v1.6.5 scheduled for DRY refactor, connection hardening, UI edge cases, and quality gate before v1.7.0.
-- **Audit tooling**: `codebase-health-audit` skill at `.claude/skills/codebase-health-audit/SKILL.md` for reusable multi-dimensional quality checks.
-- **Still deferred after v1.2.5**: real asio (mini-asio still vendored), real spdlog, production bcrypt-compatible hashing, durable SQLite repository SQL, heartbeat timeout sweep, longer load soak.
+- **Latest checkpoint**: v1.7.0 — AI Assistant Panel + Friend System + Security Hardening. 2026-05-29 full-stack audit: 6-pillar PASS (5/6 pillars PASS, 1 WARN). All 5 C++ tests passing. See `docs/audit-report-2026-05-29.md`.
+- **Completed in this sprint**: DRY refactor (ChatArea/GroupChatArea shared hooks+components), connection hardening (reconnectTimer→store, max 5 retries), bcrypt password migration (sha256 auto-upgrade), rate limiting (20 msg/s per session), frame hardening (256 KiB limit), database indexes (9 expression indexes + migration framework), AI panel (search + summarize + AIService plugin arch), Friend system (protocol 34–42 + FriendRepository + 4 routing handlers + ContactList UI).
+- **Server**: TcpServer + AsyncSession (rate-limited), Database (indexed + migration v1), UserRepository (bcrypt+sha256 auto-upgrade), FriendRepository (direct SQLite), SessionPool, PresenceManager, MessageRouter (16 handlers), MessageRepository, ChannelRepository.
+- **Client**: ChatArea/GroupChatArea DRY (useChatScroll + useChatInput + ChatComponents), ContactList friend UI (Add/Remove/Accept/Reject), Sidebar AI panel (search + summarize + provider config), AIService plugin arch (LocalSearch + ClaudeAPI), connectionStore hardening.
+- **Protocol**: 43 message types (0–42). v1.2.0 — 9 friend system types added (34–42).
+- **Graphify**: 8,826 nodes / 30,036 edges / 523 communities knowledge graph, AST-only (100% extracted). Git hooks auto-update.
+- **CI/CD**: 4-layer gate pipeline designed (L1 pre-commit / L2 pre-PR / L3 quality gate / L4 merge gate). Scripts pending at `scripts/gates/`.
+- **Audit tooling**: `codebase-health-audit` skill at `.claude/skills/codebase-health-audit/SKILL.md`.
+- **Still deferred**: real asio (mini-asio still vendored), real spdlog, heartbeat timeout sweep, longer load soak, Tauri keyring for API key storage.
 
 ## Key Constraints
 
@@ -211,3 +214,13 @@ All `Backgrounds/*` (full-page WebGL/Canvas, inappropriate for chat window). All
 - **Color changes** update both `tailwind.config.ts` tokens and the color adaptation table above.
 - **Tauri capabilities** are minimal (`core:default` + `core:event:default`) — do not add permissions without explicit need.
 - **No existing npm animation library** — do not introduce framer-motion or gsap before Phase 2 is approved.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

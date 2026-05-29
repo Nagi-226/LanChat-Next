@@ -14,6 +14,17 @@ import type {
   UserInfo,
   GroupInfo,
   ProtocolMessage,
+  AIRequestMessage,
+  AIResponseMessage,
+  AIStreamChunkMessage,
+  FriendRequestMessage,
+  FriendRequestAckMessage,
+  FriendAcceptReturnMessage,
+  FriendRemoveReturnMessage,
+  FriendListReturnMessage,
+  FriendOnlineMessage,
+  RequestHistoryMessage,
+  HistoryResponseMessage,
 } from '../../../../protocol/message_types';
 import { MsgType, isValidMsgType } from '../../../../protocol/message_types';
 import { useConnectionStore } from './connectionStore';
@@ -28,6 +39,22 @@ interface AuthState {
   view: 'login' | 'register';
   loading: boolean;
   error: string | null;
+}
+
+export interface FriendRequestInfo extends UserInfo {
+  msg?: string;
+}
+
+export interface SearchResult {
+  id: string;
+  messageId: string;
+  fromId: number;
+  toId?: number;
+  groupId?: number;
+  content: string;
+  contentType: ChatMessage['contentType'];
+  timestamp: number;
+  sourceName: string;
 }
 
 interface ChatState {
@@ -55,6 +82,19 @@ interface ChatState {
   register: (nickname: string, password: string) => Promise<void>;
   sendPrivateMessage: (toId: number, content: string) => Promise<void>;
   sendGroupMessage: (groupId: number, content: string) => Promise<void>;
+  searchResults: SearchResult[];
+  isSearching: boolean;
+  searchQuery: string;
+  searchMessages: (query: string, scope?: 'all' | 'direct' | 'group') => Promise<void>;
+  requestHistory: (target: { type: 'direct' | 'group'; id: number; limit?: number }) => Promise<void>;
+  summaryText: string;
+  isSummarizing: boolean;
+  summarizeConversation: (target: { type: 'direct' | 'group'; id: number; providerId?: string; model?: string }) => Promise<void>;
+  friends: Contact[];
+  friendRequests: FriendRequestInfo[];
+  sendFriendRequest: (toId: number, msg?: string) => Promise<void>;
+  respondToRequest: (fromId: number, accept: boolean) => Promise<void>;
+  removeFriend: (friendId: number) => Promise<void>;
   handleIncomingMessage: (msg: ProtocolMessage) => void;
   logout: () => void;
 }
@@ -115,6 +155,38 @@ function updateMessageStatus(messages: ChatMessage[] | undefined, id: string, st
   return (messages || []).map((message) => (message.id === id ? { ...message, status } : message));
 }
 
+function sourceNameFor(item: { fromId: number; groupId?: number }, contacts: Contact[], groups: GroupInfo[]): string {
+  if (item.groupId) {
+    return groups.find((group) => group.groupId === item.groupId)?.name ?? `Group #${item.groupId}`;
+  }
+  return contacts.find((contact) => contact.id === item.fromId)?.nickname ?? `User #${item.fromId}`;
+}
+
+function parseSearchPayload(payload: string, contacts: Contact[], groups: GroupInfo[]): SearchResult[] {
+  try {
+    const parsed = JSON.parse(payload) as { messages?: Record<string, unknown>[] };
+    return (parsed.messages || []).map((item, index) => {
+      const fromId = Number(item.fromId ?? 0);
+      const toId = item.toId ? Number(item.toId) : undefined;
+      const groupId = item.groupId ? Number(item.groupId) : undefined;
+      const messageId = String(item.msg_id ?? `${Date.now()}-${index}`);
+      return {
+        id: `${messageId}-${index}`,
+        messageId,
+        fromId,
+        toId,
+        groupId,
+        content: String(item.msg ?? ''),
+        contentType: (item.content_type as ChatMessage['contentType']) ?? 'text',
+        timestamp: Number(item.timestamp ?? Date.now()),
+        sourceName: sourceNameFor({ fromId, groupId }, contacts, groups),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 function upsertGroupUser(groups: GroupInfo[], groupId: number, user: UserInfo): GroupInfo[] {
   return groups.map((group) => {
     if (group.groupId !== groupId) return group;
@@ -158,6 +230,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   messagesByGroup: {},
   activeGroupId: null,
   selectGroup: (id) => set({ activeGroupId: id, activeContactId: null }),
+  searchResults: [],
+  isSearching: false,
+  searchQuery: '',
+  summaryText: '',
+  isSummarizing: false,
+  friends: [],
+  friendRequests: [],
 
   login: async (id, password) => {
     const { setAuthLoading, setAuthError } = get();
@@ -308,13 +387,98 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  searchMessages: async (query, scope = 'all') => {
+    const trimmed = query.trim();
+    set({ searchQuery: trimmed, isSearching: Boolean(trimmed), searchResults: trimmed ? get().searchResults : [] });
+    if (!trimmed) return;
+
+    const msg: AIRequestMessage & { scope?: string; limit?: number } = {
+      type: MsgType.AIRequest,
+      request_id: `search-${Date.now()}`,
+      ai_type: 'search',
+      msg: trimmed,
+      scope,
+      limit: 50,
+    };
+
+    try {
+      await useConnectionStore.getState().sendRawJson(JSON.stringify(msg));
+    } catch (e) {
+      set({ isSearching: false });
+      throw e;
+    }
+  },
+
+  requestHistory: async (target) => {
+    const user = get().currentUser;
+    if (!user) return;
+    const msg: RequestHistoryMessage = {
+      type: MsgType.RequestHistory,
+      id: user.id,
+      limit: target.limit ?? 100,
+      ...(target.type === 'group' ? { groupId: target.id } : { toId: target.id }),
+    };
+    await useConnectionStore.getState().sendRawJson(JSON.stringify(msg));
+  },
+
+  summarizeConversation: async (target) => {
+    set({ isSummarizing: true, summaryText: '' });
+    const msg: AIRequestMessage & { provider?: string; model?: string } = {
+      type: MsgType.AIRequest,
+      request_id: `summarize-${Date.now()}`,
+      ai_type: 'summarize',
+      msg: `${target.type}:${target.id}`,
+      provider: target.providerId,
+      model: target.model,
+    };
+    try {
+      await useConnectionStore.getState().sendRawJson(JSON.stringify(msg));
+    } catch (e) {
+      set({ isSummarizing: false, summaryText: String(e) });
+      throw e;
+    }
+  },
+
+  sendFriendRequest: async (toId, msg = '') => {
+    const user = get().currentUser;
+    if (!user) return;
+    const request: FriendRequestMessage = {
+      type: MsgType.FriendRequest,
+      fromId: user.id,
+      toId,
+      msg,
+    };
+    await useConnectionStore.getState().sendRawJson(JSON.stringify(request));
+  },
+
+  respondToRequest: async (fromId, accept) => {
+    const user = get().currentUser;
+    if (!user) return;
+    await useConnectionStore.getState().sendRawJson(JSON.stringify({
+      type: accept ? MsgType.FriendAccept : MsgType.FriendRemove,
+      fromId,
+      toId: user.id,
+    }));
+  },
+
+  removeFriend: async (friendId) => {
+    const user = get().currentUser;
+    if (!user) return;
+    await useConnectionStore.getState().sendRawJson(JSON.stringify({
+      type: MsgType.FriendRemove,
+      fromId: user.id,
+      toId: friendId,
+    }));
+  },
+
   handleIncomingMessage: (raw) => {
     if (!isValidMsgType(raw.type)) return;
 
     switch (raw.type) {
       case MsgType.LoginSuccessReturn: {
         const login = raw as LoginSuccessReturnMessage;
-        const contacts = toContacts(login.friends || []);
+        const friends = toContacts(login.friends || []);
+        const contacts = toContacts(login.users || login.friends || []);
         const firstContactId = selectFirstContact(contacts);
         set({
           currentUser: {
@@ -323,6 +487,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             headId: login.headId ?? 0,
           },
           contacts,
+          friends,
           groups: login.groups || [],
           messagesByGroup: {},
           activeContactId: firstContactId,
@@ -385,6 +550,38 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         break;
       }
 
+      case MsgType.HistoryResponse: {
+        const history = raw as HistoryResponseMessage;
+        const messages = (history.messages || []).map((item) => toChatMessage(item as Partial<ReceiveMsgMessage | ReceiveGroupMsgMessage>));
+        const first = history.messages?.[0] as { fromId?: number; toId?: number; groupId?: number } | undefined;
+        if (!first || messages.length === 0) break;
+        const mergeById = (existing: ChatMessage[]) => {
+          const byId = new Map(existing.map((message) => [message.id, message]));
+          for (const message of messages) byId.set(message.id, message);
+          return [...byId.values()].sort((a, b) => a.timestamp - b.timestamp);
+        };
+        if (first.groupId) {
+          set((s) => ({
+            messagesByGroup: {
+              ...s.messagesByGroup,
+              [first.groupId as number]: mergeById(s.messagesByGroup[first.groupId as number] || []),
+            },
+          }));
+        } else {
+          const currentUserId = get().currentUser?.id ?? 0;
+          const peerId = first.fromId === currentUserId ? first.toId : first.fromId;
+          if (peerId) {
+            set((s) => ({
+              messagesByContact: {
+                ...s.messagesByContact,
+                [peerId]: mergeById(s.messagesByContact[peerId] || []),
+              },
+            }));
+          }
+        }
+        break;
+      }
+
       case MsgType.UserJoinGroup: {
         const incoming = raw as UserJoinGroupMessage;
         const nickname = incoming.nickname || `User ${incoming.id}`;
@@ -431,6 +628,114 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         break;
       }
 
+      case MsgType.AIResponse: {
+        const response = raw as AIResponseMessage;
+        if (response.request_id.startsWith('search-')) {
+          set((s) => ({
+            isSearching: false,
+            searchResults: response.status === 'done' && response.msg ? parseSearchPayload(response.msg, s.contacts, s.groups) : [],
+          }));
+        } else if (response.request_id.startsWith('summarize-') && response.status === 'start') {
+          set({ isSummarizing: true, summaryText: '' });
+        } else if (response.request_id.startsWith('summarize-')) {
+          set((s) => ({ isSummarizing: false, summaryText: response.msg ?? s.summaryText }));
+        }
+        break;
+      }
+
+      case MsgType.AIStreamChunk: {
+        const chunk = raw as AIStreamChunkMessage;
+        if (chunk.request_id.startsWith('summarize-')) {
+          set((s) => ({
+            summaryText: `${s.summaryText}${chunk.msg}`,
+            isSummarizing: !chunk.is_final,
+          }));
+        }
+        break;
+      }
+
+      case MsgType.FriendRequest: {
+        const request = raw as FriendRequestMessage;
+        const fromId = request.fromId ?? 0;
+        const fromUser = get().contacts.find((contact) => contact.id === fromId);
+        set((s) => ({
+          friendRequests: [
+            ...s.friendRequests.filter((request) => request.id !== fromId),
+            {
+              id: fromId,
+              nickname: fromUser?.nickname ?? `User #${fromId}`,
+              headId: fromUser?.headId,
+              msg: request.msg,
+            },
+          ],
+        }));
+        break;
+      }
+
+      case MsgType.FriendRequestAck: {
+        const ack = raw as FriendRequestAckMessage;
+        if (ack.status === 'error' || ack.status === 'failed') {
+          set((s) => ({ auth: { ...s.auth, error: ack.msg ?? 'Friend request failed' } }));
+        }
+        break;
+      }
+
+      case MsgType.FriendAcceptReturn: {
+        const accepted = raw as FriendAcceptReturnMessage;
+        if (accepted.status === 'ok') {
+          set((s) => {
+            const existing = s.contacts.find((contact) => contact.id === accepted.friendId);
+            const contact: Contact = existing ?? {
+              id: accepted.friendId,
+              nickname: accepted.nickname ?? `User #${accepted.friendId}`,
+              headId: accepted.headId,
+              status: 'offline',
+              unread: 0,
+            };
+            return {
+              contacts: existing ? s.contacts : [...s.contacts, contact],
+              friends: [...s.friends.filter((friend) => friend.id !== contact.id), contact],
+              friendRequests: s.friendRequests.filter((request) => request.id !== contact.id),
+            };
+          });
+        }
+        break;
+      }
+
+      case MsgType.FriendRemoveReturn: {
+        const removed = raw as FriendRemoveReturnMessage & { friendId?: number };
+        if (removed.status === 'ok' && removed.friendId) {
+          set((s) => ({
+            friends: s.friends.filter((friend) => friend.id !== removed.friendId),
+            friendRequests: s.friendRequests.filter((request) => request.id !== removed.friendId),
+          }));
+        }
+        break;
+      }
+
+      case MsgType.FriendListReturn: {
+        const list = raw as FriendListReturnMessage;
+        const friends = toContacts(list.friends || []);
+        set((s) => ({
+          friends,
+          contacts: [
+            ...s.contacts.filter((contact) => !friends.some((friend) => friend.id === contact.id)),
+            ...friends,
+          ],
+        }));
+        break;
+      }
+
+      case MsgType.FriendOnline: {
+        const status = raw as FriendOnlineMessage;
+        const nextStatus = status.status === 'ok' ? 'online' as const : 'offline' as const;
+        set((s) => ({
+          contacts: s.contacts.map((c) => (c.id === status.friendId ? { ...c, status: nextStatus } : c)),
+          friends: s.friends.map((c) => (c.id === status.friendId ? { ...c, status: nextStatus } : c)),
+        }));
+        break;
+      }
+
       default:
         break;
     }
@@ -440,11 +745,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set({
       currentUser: null,
       contacts: [],
+      friends: [],
+      friendRequests: [],
       messagesByContact: {},
       activeContactId: null,
       groups: [],
       messagesByGroup: {},
       activeGroupId: null,
+      searchResults: [],
+      isSearching: false,
+      searchQuery: '',
+      summaryText: '',
+      isSummarizing: false,
       auth: { view: 'login', loading: false, error: null },
     });
   },
