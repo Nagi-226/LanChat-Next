@@ -31,7 +31,8 @@ int TcpServer::run() {
         ServerLogger::instance().init("logs");
         ServerLogger::instance().info("LanChat server-next v1.1.9-prep starting");
 
-        acceptor_ = std::make_unique<vendor::asio::ip::tcp::acceptor>(ctx_, port_);
+        acceptor_ = std::make_unique<net::ip::tcp::acceptor>(
+            ctx_, net::ip::tcp::endpoint(net::ip::tcp::v4(), port_));
         ServerLogger::instance().info(
             "listening on 0.0.0.0:" + std::to_string(port_));
 
@@ -55,7 +56,7 @@ void TcpServer::stop() {
 void TcpServer::startAccept() {
     auto session = std::make_shared<AsyncSession>(ctx_, *this);
     acceptor_->async_accept(session->socket(),
-        [this, session](vendor::asio::error_code ec) {
+        [this, session](const net::error_code& ec) {
             if (!ec) {
                 if (!sessions_.add(session)) {
                     ServerLogger::instance().error("max connections reached; rejecting session");
@@ -102,9 +103,9 @@ size_t TcpServer::connectionCount() const {
 }
 
 void TcpServer::startHeartbeatSweep() {
-    heartbeat_timer_ = std::make_unique<vendor::asio::steady_timer>(ctx_);
+    heartbeat_timer_ = std::make_unique<net::steady_timer>(ctx_);
     heartbeat_timer_->expires_after(std::chrono::seconds(30));
-    heartbeat_timer_->async_wait([this](vendor::asio::error_code ec) {
+    heartbeat_timer_->async_wait([this](const net::error_code& ec) {
         if (!ec) {
             sweepHeartbeatTimeouts();
             startHeartbeatSweep();

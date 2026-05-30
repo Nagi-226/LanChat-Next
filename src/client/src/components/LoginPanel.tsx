@@ -4,6 +4,7 @@ import ClickSpark from '../lib/ClickSpark';
 import SpotlightCard from '../lib/SpotlightCard';
 import TextType from '../lib/TextType';
 import { ButtonSpinner } from '../lib/utils';
+import { useTranslation } from '../lib/i18n';
 
 interface LoginPanelProps {
   onLogin: (id: number, password: string) => void;
@@ -26,6 +27,7 @@ function readLastPassword(): string {
 }
 
 export function LoginPanel({ onLogin, onSwitchToRegister, error, loading }: LoginPanelProps) {
+  const { t } = useTranslation();
   const [id, setId] = useState(readLastUserId);
   const [password, setPassword] = useState(readLastPassword);
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +49,7 @@ export function LoginPanel({ onLogin, onSwitchToRegister, error, loading }: Logi
             <TextType text="LanChat-Next" loop={false} typingSpeed={40} />
           </h1>
           <p className="mb-6 text-center text-xs text-light-muted dark:text-dark-muted">
-            Sign in to your LAN chat account
+            {t('login.subtitle')}
           </p>
 
           {error && (
@@ -57,20 +59,20 @@ export function LoginPanel({ onLogin, onSwitchToRegister, error, loading }: Logi
           )}
 
           <label htmlFor="login-user-id" className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-            User ID
+            {t('login.userId')}
           </label>
           <input
             id="login-user-id"
             type="text"
             value={id}
             onChange={(e) => setId(e.target.value)}
-            placeholder="Enter user ID"
+            placeholder={t('login.userIdPlaceholder')}
             autoFocus
             className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
           />
 
           <label htmlFor="login-password" className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-            Password
+            {t('login.password')}
           </label>
           <div className="mb-6 flex rounded-lg border border-light-border bg-white focus-within:border-dark-highlight dark:border-dark-accent dark:bg-dark-accent dark:focus-within:border-dark-highlight">
             <input
@@ -78,7 +80,7 @@ export function LoginPanel({ onLogin, onSwitchToRegister, error, loading }: Logi
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder={t('login.passwordPlaceholder')}
               className="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2.5 text-sm text-light-text placeholder-light-muted outline-none dark:text-dark-text dark:placeholder-dark-muted"
             />
             <motion.button
@@ -87,9 +89,9 @@ export function LoginPanel({ onLogin, onSwitchToRegister, error, loading }: Logi
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="rounded-r-lg px-3 text-xs font-medium text-light-muted hover:text-dark-highlight dark:text-dark-muted"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
             >
-              {showPassword ? 'Hide' : 'Show'}
+              {showPassword ? t('login.hide') : t('login.show')}
             </motion.button>
           </div>
 
@@ -103,18 +105,18 @@ export function LoginPanel({ onLogin, onSwitchToRegister, error, loading }: Logi
               className="flex w-full items-center justify-center rounded-lg bg-dark-highlight px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#d63850] active:bg-[#c23045] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading && <ButtonSpinner />}
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? t('login.signingIn') : t('login.signIn')}
             </motion.button>
           </ClickSpark>
 
           <p className="mt-4 text-center text-xs text-light-muted dark:text-dark-muted">
-            No account yet?{' '}
+            {t('login.noAccount')}{' '}
             <button
               type="button"
               onClick={onSwitchToRegister}
               className="font-medium text-dark-highlight hover:underline"
             >
-              Create one
+              {t('login.createOne')}
             </button>
           </p>
         </form>

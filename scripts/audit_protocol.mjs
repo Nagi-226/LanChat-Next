@@ -52,8 +52,8 @@ for (const message of definitions.messages) {
 }
 
 const terminal = definitions.messages.at(-1);
-if (terminal.name !== 'FriendOnline' || terminal.value !== 42) {
-  fail('Terminal protocol value must be FriendOnline = 42 for v1.6.8+.');
+if (terminal.name !== 'ProtocolHello' || terminal.value !== 50) {
+  fail('Terminal protocol value must be ProtocolHello = 50 for v1.8.1+.');
 }
 
 console.log(`Protocol audit passed: ${definitions.messages.length} schemas, TypeScript enum, and C++ enum are aligned.`);

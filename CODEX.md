@@ -3,7 +3,8 @@
 LanChat-Next 客户端开发指南。Codex 负责 React 18 UI + Tauri v2 Rust 桥接层的实际开发，
 Claude 负责 C++17 服务端架构设计。两端通过 `protocol/` 对齐。
 
-> 最后更新: 2026-05-29 | 当前版本: v1.7.0 | 下一目标: v2.0.0 企业级加固
+> 最后更新: 2026-05-30 | 当前版本: v2.0.0-a1 | 下一目标: v2.0.0-a2/a3 spdlog + nlohmann/json → v2.0.0 正式发布
+> 完整路线图: `docs/ROADMAP_v2.0.0.md`
 > 竞品调研: `docs/agent-reach-research-v1.5.md` — 8 同类项目 + 5 Chat UI 组件库 + shadcn 官方 Blocks + 设计系统 + 色系对标 + Glassmorphism 库
 
 ## Codex 负责范围
@@ -41,8 +42,8 @@ cargo check
 # 协议对齐校验
 npm run protocol:check
 
-# 全量验证（包含 server + client）
-powershell -ExecutionPolicy Bypass -File scripts/verify_v1_2_5.ps1
+# real-asio 全量验证（包含 500 client load smoke）
+powershell -ExecutionPolicy Bypass -File scripts/verify_v2_0_0_a1.ps1
 ```
 
 ## 技术栈（仅客户端）
@@ -63,12 +64,16 @@ powershell -ExecutionPolicy Bypass -File scripts/verify_v1_2_5.ps1
 ## 版本路线图
 
 ```
-v1.3.x ✅ (6子) → v1.4.x ✅ (7子) → v1.5.0 ✅ (Phase 3) → v1.6.0 ✅
-                                       GSAP ScrollTrigger     Phase 4 打标
+已完成:
+v1.3.x ✅ → v1.4.x ✅ → v1.5.x ✅ → v1.6.0 ✅ → v1.7.0 ✅
+Phase 1-2     Phase 2       Phase 3-4    Phase 4 标签   AI+好友+安全+i18n
 
-v1.5.1 ✅ → v1.5.2 ✅ → v1.5.3 ✅ → v1.5.4 ✅ → v1.5.5 ✅ → v1.5.6 ✅ → v1.6.0 ✅
-气泡+联系人  参数统一   智能滚动   加载过渡   去重清理   质量门     Phase 4
-进出场动画   时长/ease  ↓新消息    crossfade  DateDivider  最终审计    正式标签
+冲刺中 (28 子版本 → v2.0.0):
+Phase 0: v1.7.1→v1.8.0 (10轮 质量加固) → 崩溃兜底/CSP/离线队列/CI/CD
+Phase 1: v1.8.1→v1.9.0 (功能补全) → 编辑/删除/回应/群组/已读/文件/协议协商/50用户基线
+Phase 2: v2.0.0-a1→v2.0.0 (11轮 基础设施) → real asio已完成/DB重构/bcrypt卸载/500人测试
+
+详见: docs/ROADMAP_v2.0.0.md
 ```
 
 ---
@@ -1044,6 +1049,36 @@ scripts/gates/
 ├── quality-gate.ps1       # L3
 └── db-migration-test.ps1  # 数据库迁移回滚
 ```
+
+---
+
+### ✅ v1.7.0 — AI 升级 + i18n（2026-05-30 完成）
+
+| 变更 | 文件 | 说明 |
+|------|------|------|
+| DeepSeek API 替换 ClaudeAPI | `lib/ai/providers/DeepSeekAPI.ts` | 直接调 `api.deepseek.com`，支持 streaming |
+| 模型扩展 | `components/Sidebar.tsx` | V4 Pro / V3 / R1 / Flash 四个模型 |
+| 中英文全界面切换 | `lib/i18n/` (4 新文件) + 14 文件修改 | ~140 翻译 key, `t()` 可脱离 React 使用 |
+| useAI 更新 | `lib/ai/useAI.ts` | ClaudeAPIProvider → DeepSeekAPIProvider |
+| uiStore 扩展 | `stores/uiStore.ts` | 新增 `language: 'en' | 'zh'` + `setLanguage()` |
+| 日期本地化 | `lib/utils.tsx` | fmtTime/fmtDateDivider 随语言自动切换 |
+| 语言切换按钮 | `App.tsx` | header 右侧 "中文"/"EN" 按钮 |
+
+**i18n 架构**: 自定义轻量模块 (~2.5KB gzipped)，`{{param}}` 插值，`useTranslation()` hook 订阅 uiStore.language 触发重渲染，`t()` 函数可独立 import 到 Zustand store 使用。
+
+---
+
+## v1.7.0 → v2.0.0 冲刺路线图
+
+详见 `docs/ROADMAP_v2.0.0.md`。三阶段 28 个子版本：
+
+```
+Phase 0 (10轮): v1.7.1 → v1.8.0    质量加固
+Phase 1 (7轮):  v1.8.1 → v1.9.0    功能补全
+Phase 2 (11轮): v2.0.0-a1 → v2.0.0 基础设施迁移 + 正式发布
+```
+
+关键基础设施迁移：mini-asio→real asio、JSON文档DB→规范化Schema、bcrypt卸载、500用户负载验证。
 
 ---
 

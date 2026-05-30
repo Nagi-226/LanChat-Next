@@ -2,9 +2,9 @@
 
 #include "AsyncSession.h"
 #include "MessageRouter.h"
+#include "Net.h"
 #include "PresenceManager.h"
 #include "SessionPool.h"
-#include "mini_asio.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -47,9 +47,9 @@ private:
     void markOfflineAndBroadcast(int userId);
 
     std::uint16_t port_;
-    vendor::asio::io_context ctx_;
-    std::unique_ptr<vendor::asio::ip::tcp::acceptor> acceptor_;
-    std::unique_ptr<vendor::asio::steady_timer> heartbeat_timer_;
+    net::io_context ctx_;
+    std::unique_ptr<net::ip::tcp::acceptor> acceptor_;
+    std::unique_ptr<net::steady_timer> heartbeat_timer_;
     SessionPool sessions_;
     PresenceManager presence_;
     MessageRouter router_;

@@ -1,7 +1,12 @@
 import { memo } from 'react';
+import { getLanguage, t } from './i18n';
+
+function localeTag(): string {
+  return getLanguage() === 'zh' ? 'zh-CN' : 'en-US';
+}
 
 export function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' });
 }
 
 export function getInitials(name: string): string {
@@ -22,10 +27,11 @@ export function fmtDateDivider(ts: number): string {
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
 
-  if (dateKey(d.getTime()) === dateKey(today.getTime())) return 'Today';
-  if (dateKey(d.getTime()) === dateKey(yesterday.getTime())) return 'Yesterday';
+  if (dateKey(d.getTime()) === dateKey(today.getTime())) return t('date.today');
+  if (dateKey(d.getTime()) === dateKey(yesterday.getTime())) return t('date.yesterday');
 
-  return d.toLocaleDateString('en-US', {
+  const loc = localeTag();
+  return d.toLocaleDateString(loc, {
     month: 'short',
     day: 'numeric',
     year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric',
@@ -50,7 +56,7 @@ export function ButtonSpinner(): JSX.Element {
 
 export function MessageSkeleton() {
   return (
-    <div className="space-y-4 px-1 py-3" aria-label="Loading messages">
+    <div className="space-y-4 px-1 py-3" aria-label={t('date.loadingMessages')}>
       {Array.from({ length: 3 }, (_, index) => (
         <div key={index} className={`flex gap-2 ${index % 2 === 0 ? 'flex-row' : 'flex-row-reverse'}`}>
           <div className="h-9 w-9 animate-pulse rounded-full bg-light-border dark:bg-dark-border" />

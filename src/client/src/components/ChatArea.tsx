@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from '../lib/i18n';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AnimatedListItem } from '../lib/AnimatedList';
 import { ChatContentSwitcher, MessageComposer, NewMessagesFAB } from '../lib/ChatComponents';
@@ -13,7 +14,11 @@ export interface ChatMessage {
   content: string;
   contentType: 'text' | 'image' | 'file' | 'system';
   timestamp: number;
-  status?: 'sending' | 'sent' | 'failed';
+  status?: 'queued' | 'sending' | 'sent' | 'failed';
+  edited?: boolean;
+  deleted?: boolean;
+  reactions?: string[];
+  read?: boolean;
 }
 
 interface ChatAreaProps {
@@ -22,6 +27,10 @@ interface ChatAreaProps {
   contactName: string;
   onSend: (content: string) => void;
   onRetryFailed?: (message: ChatMessage) => void;
+  onTyping?: () => void;
+  onEditMessage?: (message: ChatMessage, content: string) => void;
+  onDeleteMessage?: (message: ChatMessage) => void;
+  onReactMessage?: (message: ChatMessage, reaction: string) => void;
   loading?: boolean;
   connected?: boolean;
 }
@@ -31,9 +40,13 @@ interface MessageBubbleProps {
   currentUserId: number;
   showSender?: boolean;
   onRetryFailed?: (message: ChatMessage) => void;
+  onEditMessage?: (message: ChatMessage, content: string) => void;
+  onDeleteMessage?: (message: ChatMessage) => void;
+  onReactMessage?: (message: ChatMessage, reaction: string) => void;
 }
 
-const MessageBubble = memo(function MessageBubble({ message, currentUserId, showSender = true, onRetryFailed }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({ message, currentUserId, showSender = true, onRetryFailed, onEditMessage, onDeleteMessage, onReactMessage }: MessageBubbleProps) {
+  const { t } = useTranslation();
   const isSelf = message.fromId === currentUserId;
   const isSystem = message.contentType === 'system';
 
@@ -61,7 +74,7 @@ const MessageBubble = memo(function MessageBubble({ message, currentUserId, show
       <div className={`max-w-[70%] ${isSelf ? 'items-end' : 'items-start'}`}>
         {showSender && (
           <div className="mb-0.5 text-xs text-light-muted dark:text-dark-muted">
-            {isSelf ? 'You' : message.nickname}
+            {isSelf ? t('chat.you') : message.nickname}
           </div>
         )}
         <div
@@ -71,19 +84,53 @@ const MessageBubble = memo(function MessageBubble({ message, currentUserId, show
               : 'rounded-bl-[2px] bg-light-bubble-other text-light-text dark:bg-dark-bubble-other dark:text-dark-text'
           }`}
         >
-          {message.content}
+          {message.deleted ? t('chat.deletedMessage') : message.content}
         </div>
+        {message.reactions && message.reactions.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {message.reactions.map((reaction) => (
+              <span key={reaction} className="rounded-full bg-dark-highlight/10 px-2 py-0.5 text-[10px] text-dark-highlight">
+                {reaction}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-light-muted dark:text-dark-muted">
           <span>{fmtTime(message.timestamp)}</span>
-          {message.status === 'sending' && <span>sending...</span>}
-          {message.status === 'failed' && <span className="text-red-500 dark:text-red-300">failed</span>}
+          {message.edited && !message.deleted && <span>{t('chat.edited')}</span>}
+          {isSelf && message.read && <span>{t('chat.read')}</span>}
+          {message.status === 'queued' && <span>{t('chat.queued')}</span>}
+          {message.status === 'sending' && <span>{t('chat.sending')}</span>}
+          {message.status === 'failed' && <span className="text-red-500 dark:text-red-300">{t('chat.failed')}</span>}
           {message.status === 'failed' && onRetryFailed && (
             <button
               type="button"
               onClick={() => onRetryFailed(message)}
               className="rounded px-1 text-red-500 underline-offset-2 hover:underline dark:text-red-300"
             >
-              retry
+              {t('chat.retry')}
+            </button>
+          )}
+          {!message.deleted && (
+            <button type="button" onClick={() => onReactMessage?.(message, '👍')} className="rounded px-1 hover:text-dark-highlight">
+              {t('chat.react')}
+            </button>
+          )}
+          {isSelf && !message.deleted && onEditMessage && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = window.prompt(t('chat.editPrompt'), message.content);
+                if (next?.trim()) onEditMessage(message, next.trim());
+              }}
+              className="rounded px-1 hover:text-dark-highlight"
+            >
+              {t('chat.edit')}
+            </button>
+          )}
+          {isSelf && !message.deleted && onDeleteMessage && (
+            <button type="button" onClick={() => onDeleteMessage(message)} className="rounded px-1 hover:text-red-500">
+              {t('chat.delete')}
             </button>
           )}
         </div>
@@ -92,11 +139,12 @@ const MessageBubble = memo(function MessageBubble({ message, currentUserId, show
   );
 });
 
-export function ChatArea({ messages, currentUserId, contactName, onSend, onRetryFailed, loading = false, connected = true }: ChatAreaProps) {
-  const chatInput = useChatInput(onSend, !connected);
+export function ChatArea({ messages, currentUserId, contactName, onSend, onRetryFailed, onTyping, onEditMessage, onDeleteMessage, onReactMessage, loading = false, connected = true }: ChatAreaProps) {
+  const { t } = useTranslation();
+  const chatInput = useChatInput(onSend, false, onTyping);
   const chatScroll = useChatScroll(messages.length);
   const messageCount = messages.length;
-  const title = messageCount > 0 ? `${messageCount} messages` : 'No message history yet';
+  const title = messageCount > 0 ? t('chat.messagesCount', { count: messageCount }) : t('chat.noMessages');
   let lastDivider = '';
 
   return (
@@ -107,7 +155,7 @@ export function ChatArea({ messages, currentUserId, contactName, onSend, onRetry
             {contactName}
           </span>
           <p className="text-[10px] text-light-muted dark:text-dark-muted">
-            Direct chat - {title}
+            {t('chat.directChat', { name: title })}
           </p>
         </div>
       </div>
@@ -117,7 +165,7 @@ export function ChatArea({ messages, currentUserId, contactName, onSend, onRetry
           <ChatContentSwitcher
             loading={loading}
             empty={messages.length === 0}
-            emptyText={`No message history with ${contactName}. Send the first one.`}
+            emptyText={t('chat.emptyState', { name: contactName })}
           >
             <AnimatePresence initial={false} mode="popLayout">
               {messages.map((msg, index) => {
@@ -128,7 +176,14 @@ export function ChatArea({ messages, currentUserId, contactName, onSend, onRetry
                   <AnimatedListItem key={msg.id} index={index} exit={{ opacity: 0, y: -10, transition: { duration: 0.12, ease: 'easeIn' } }}>
                     {shouldShowDivider && <DateDivider timestamp={msg.timestamp} />}
                     <div data-message-id={msg.id}>
-                      <MessageBubble message={msg} currentUserId={currentUserId} onRetryFailed={onRetryFailed} />
+                      <MessageBubble
+                        message={msg}
+                        currentUserId={currentUserId}
+                        onRetryFailed={onRetryFailed}
+                        onEditMessage={onEditMessage}
+                        onDeleteMessage={onDeleteMessage}
+                        onReactMessage={onReactMessage}
+                      />
                     </div>
                   </AnimatedListItem>
                 );
@@ -148,10 +203,10 @@ export function ChatArea({ messages, currentUserId, contactName, onSend, onRetry
         label={`Message to ${contactName}`}
         input={chatInput.input}
         textareaRef={chatInput.textareaRef}
-        placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-        disabled={!connected}
-        disabledTitle="Not connected"
-        sendLabel="Send message"
+        placeholder={t('chat.placeholder')}
+        disabled={false}
+        disabledTitle={connected ? undefined : t('chat.queuedWhenOffline')}
+        sendLabel={t('chat.sendMessage')}
         onInput={chatInput.handleInput}
         onKeyDown={chatInput.handleKeyDown}
         onSend={chatInput.handleSend}

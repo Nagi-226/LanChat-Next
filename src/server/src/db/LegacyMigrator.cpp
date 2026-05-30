@@ -37,7 +37,6 @@ LegacyMigrator::MigrationReport LegacyMigrator::migrateUsers(
             continue;
         }
 
-        int legacyId = static_cast<int>(obj.at("id").as_int());
         std::string password = obj.at("password").as_string();
         std::string nickname = obj.at("nickname").as_string();
         int headId = obj.count("headId") ? static_cast<int>(obj.at("headId").as_int()) : 0;

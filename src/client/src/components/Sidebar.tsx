@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useUIStore } from '../stores/uiStore';
-import { useChatStore, type SearchResult } from '../stores/chatStore';
+import { type SearchResult, useAuthStore, useMessageStore, useSearchStore } from '../stores/chatStore';
 import { fmtTime } from '../lib/utils';
 import { useAI } from '../lib/ai/useAI';
+import { DeepSeekAPIProvider } from '../lib/ai/providers/DeepSeekAPI';
+import { useTranslation } from '../lib/i18n';
 
 type SearchScope = 'all' | 'direct' | 'group';
 type Tab = 'search' | 'summary';
@@ -42,29 +44,32 @@ function SearchRow({ result, query, onJump }: { result: SearchResult; query: str
 }
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const toggleAIPanel = useUIStore((s) => s.toggleAIPanel);
   const { providers, providerId, setProviderId, model, setModel, apiKeyConfigured, saveApiKey, clearApiKey } = useAI();
-  const contacts = useChatStore((s) => s.contacts);
-  const groups = useChatStore((s) => s.groups);
-  const currentUser = useChatStore((s) => s.currentUser);
-  const activeContactId = useChatStore((s) => s.activeContactId);
-  const activeGroupId = useChatStore((s) => s.activeGroupId);
-  const results = useChatStore((s) => s.searchResults);
-  const messagesByContact = useChatStore((s) => s.messagesByContact);
-  const messagesByGroup = useChatStore((s) => s.messagesByGroup);
-  const isSearching = useChatStore((s) => s.isSearching);
-  const searchMessages = useChatStore((s) => s.searchMessages);
-  const requestHistory = useChatStore((s) => s.requestHistory);
-  const selectContact = useChatStore((s) => s.setActiveContact);
-  const selectGroup = useChatStore((s) => s.selectGroup);
-  const summaryText = useChatStore((s) => s.summaryText);
-  const isSummarizing = useChatStore((s) => s.isSummarizing);
-  const summarizeConversation = useChatStore((s) => s.summarizeConversation);
+  const contacts = useMessageStore((s) => s.contacts);
+  const groups = useMessageStore((s) => s.groups);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const activeContactId = useMessageStore((s) => s.activeContactId);
+  const activeGroupId = useMessageStore((s) => s.activeGroupId);
+  const results = useSearchStore((s) => s.searchResults);
+  const messagesByContact = useMessageStore((s) => s.messagesByContact);
+  const messagesByGroup = useMessageStore((s) => s.messagesByGroup);
+  const isSearching = useSearchStore((s) => s.isSearching);
+  const searchMessages = useSearchStore((s) => s.searchMessages);
+  const requestHistory = useMessageStore((s) => s.requestHistory);
+  const selectContact = useMessageStore((s) => s.setActiveContact);
+  const selectGroup = useMessageStore((s) => s.selectGroup);
+  const summaryText = useSearchStore((s) => s.summaryText);
+  const isSummarizing = useSearchStore((s) => s.isSummarizing);
+  const summarizeConversation = useSearchStore((s) => s.summarizeConversation);
 
   const [tab, setTab] = useState<Tab>('search');
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<SearchScope>('all');
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [summaryLocal, setSummaryLocal] = useState('');
+  const [isSummarizingLocal, setIsSummarizingLocal] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -110,12 +115,23 @@ export function Sidebar() {
     }, 420);
   };
 
+  const tabLabel: Record<Tab, string> = {
+    search: t('sidebar.search'),
+    summary: t('sidebar.summary'),
+  };
+
+  const scopeLabel: Record<SearchScope, string> = {
+    all: t('sidebar.scopeAll'),
+    direct: t('sidebar.scopeDirect'),
+    group: t('sidebar.scopeGroup'),
+  };
+
   return (
     <aside className="flex h-full w-panel flex-shrink-0 flex-col border-l border-light-border bg-light-sidebar dark:border-dark-border dark:bg-dark-sidebar">
       <div className="flex h-12 items-center justify-between border-b border-light-border px-4 dark:border-dark-border">
         <div>
-          <span className="text-xs font-semibold text-light-muted dark:text-dark-muted">AI Assistant</span>
-          <p className="text-[10px] text-light-muted/80 dark:text-dark-muted/80">Search and summarize local LAN history</p>
+          <span className="text-xs font-semibold text-light-muted dark:text-dark-muted">{t('sidebar.aiAssistant')}</span>
+          <p className="text-[10px] text-light-muted/80 dark:text-dark-muted/80">{t('sidebar.aiSubtitle')}</p>
         </div>
         <motion.button
           type="button"
@@ -123,9 +139,9 @@ export function Sidebar() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="rounded px-2 py-0.5 text-[10px] text-light-muted transition-colors hover:text-dark-highlight dark:text-dark-muted"
-          aria-label="Close AI panel"
+          aria-label={t('sidebar.closePanel')}
         >
-          Close
+          {t('sidebar.close')}
         </motion.button>
       </div>
 
@@ -138,12 +154,12 @@ export function Sidebar() {
               onClick={() => setTab(item)}
               className={`rounded-md px-2 py-1 text-xs font-medium capitalize ${tab === item ? 'bg-dark-highlight text-white' : 'text-light-muted dark:text-dark-muted'}`}
             >
-              {item}
+              {tabLabel[item]}
             </button>
           ))}
         </div>
         <label className="text-[10px] font-semibold uppercase tracking-wider text-light-muted dark:text-dark-muted">
-          Provider
+          {t('sidebar.provider')}
           <select
             value={providerId}
             onChange={(event) => setProviderId(event.target.value)}
@@ -156,19 +172,20 @@ export function Sidebar() {
         </label>
         <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-light-muted dark:text-dark-muted">
-            Model
+            {t('sidebar.model')}
             <select
               value={model}
               onChange={(event) => setModel(event.target.value)}
               className="mt-1 w-full rounded-lg border border-light-border bg-white px-2 py-1.5 text-xs normal-case text-light-text outline-none focus:border-dark-highlight dark:border-dark-border dark:bg-dark-accent dark:text-dark-text"
             >
-              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-              <option value="claude-3-haiku">Claude 3 Haiku</option>
-              <option value="local-summary">Local Summary</option>
+              <option value="deepseek-v4-pro">{t('sidebar.modelOption.v4pro')}</option>
+              <option value="deepseek-chat">{t('sidebar.modelOption.v3')}</option>
+              <option value="deepseek-reasoner">{t('sidebar.modelOption.r1')}</option>
+              <option value="deepseek-flash">{t('sidebar.modelOption.flash')}</option>
             </select>
           </label>
           <div className="self-end rounded-lg border border-light-border px-2 py-1.5 text-[10px] text-light-muted dark:border-dark-border dark:text-dark-muted">
-            Key {apiKeyConfigured ? 'set' : 'unset'}
+            Key {apiKeyConfigured ? t('sidebar.keySet') : t('sidebar.keyUnset')}
           </div>
         </div>
         <div className="mt-2 flex gap-2">
@@ -176,25 +193,25 @@ export function Sidebar() {
             value={apiKeyInput}
             onChange={(event) => setApiKeyInput(event.target.value)}
             type="password"
-            placeholder="API key"
+            placeholder={t('sidebar.apiKeyPlaceholder')}
             className="min-w-0 flex-1 rounded-lg border border-light-border bg-white px-2 py-1.5 text-xs text-light-text outline-none focus:border-dark-highlight dark:border-dark-border dark:bg-dark-accent dark:text-dark-text"
           />
           <button
             type="button"
             onClick={() => {
-              saveApiKey(apiKeyInput);
+              void saveApiKey(apiKeyInput);
               setApiKeyInput('');
             }}
             className="rounded-lg bg-dark-highlight px-2 py-1.5 text-[10px] font-semibold text-white"
           >
-            Save
+            {t('sidebar.save')}
           </button>
           <button
             type="button"
-            onClick={clearApiKey}
+            onClick={() => void clearApiKey()}
             className="rounded-lg border border-light-border px-2 py-1.5 text-[10px] font-semibold text-light-muted hover:text-red-500 dark:border-dark-border dark:text-dark-muted"
           >
-            Clear
+            {t('sidebar.clear')}
           </button>
         </div>
       </div>
@@ -204,7 +221,7 @@ export function Sidebar() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search messages..."
+            placeholder={t('sidebar.searchPlaceholder')}
             className="mb-2 rounded-lg border border-light-border bg-white px-3 py-2 text-xs text-light-text outline-none focus:border-dark-highlight dark:border-dark-border dark:bg-dark-accent dark:text-dark-text"
           />
           <div className="mb-3 flex gap-1">
@@ -215,7 +232,7 @@ export function Sidebar() {
                 onClick={() => setScope(item)}
                 className={`rounded-full px-2 py-1 text-[10px] font-medium ${scope === item ? 'bg-dark-highlight text-white' : 'bg-light-bg text-light-muted dark:bg-dark-bg dark:text-dark-muted'}`}
               >
-                {item}
+                {scopeLabel[item]}
               </button>
             ))}
           </div>
@@ -225,12 +242,12 @@ export function Sidebar() {
             ))}
             {!isSearching && query.trim() && results.length === 0 && (
               <div className="rounded-lg border border-dashed border-light-border px-3 py-8 text-center text-xs text-light-muted dark:border-dark-border dark:text-dark-muted">
-                No results
+                {t('sidebar.noResults')}
               </div>
             )}
             {!query.trim() && (
               <div className="rounded-lg border border-dashed border-light-border px-3 py-8 text-center text-xs text-light-muted dark:border-dark-border dark:text-dark-muted">
-                Type a keyword to search private and group history.
+                {t('sidebar.searchEmptyHint')}
               </div>
             )}
             {results.map((result) => <SearchRow key={result.id} result={result} query={query} onJump={jumpToResult} />)}
@@ -255,16 +272,71 @@ export function Sidebar() {
           </select>
           <motion.button
             type="button"
-            onClick={() => activeConversation && summarizeConversation({ ...activeConversation, providerId, model })}
-            disabled={!activeConversation || isSummarizing}
-            whileHover={{ scale: isSummarizing ? 1 : 1.02 }}
-            whileTap={{ scale: isSummarizing ? 1 : 0.98 }}
+            onClick={async () => {
+              if (!activeConversation) return;
+              setIsSummarizingLocal(true);
+              setSummaryLocal('');
+              try {
+                // gather messages from local store
+                const store = useMessageStore.getState();
+                const msgs =
+                  activeConversation.type === 'group'
+                    ? (store.messagesByGroup[activeConversation.id] ?? [])
+                    : (store.messagesByContact[activeConversation.id] ?? []);
+                if (msgs.length === 0) {
+                  // try loading history first
+                  await store.requestHistory({ ...activeConversation, limit: 100 });
+                  // wait a tick for store update
+                  await new Promise((r) => setTimeout(r, 500));
+                  const updated =
+                    activeConversation.type === 'group'
+                      ? (useMessageStore.getState().messagesByGroup[activeConversation.id] ?? [])
+                      : (useMessageStore.getState().messagesByContact[activeConversation.id] ?? []);
+                  if (updated.length === 0) {
+                    setSummaryLocal(t('sidebar.noConversationMessages'));
+                    return;
+                  }
+                  const transcript = updated
+                    .slice(-60)
+                    .map((m) => `[${m.nickname ?? t('sidebar.fallbackName')}] (${new Date(m.timestamp).toLocaleString()}): ${m.content}`)
+                    .join('\n');
+                  const deepseek = new DeepSeekAPIProvider();
+                  const result = await deepseek.execute({
+                    type: 29 as const,
+                    request_id: `summarize-${Date.now()}`,
+                    ai_type: 'summarize',
+                    msg: `Summarize the following conversation:\n\n${transcript}`,
+                  });
+                  setSummaryLocal(result?.msg ?? t('sidebar.noSummaryReturned'));
+                  return;
+                }
+                const transcript = msgs
+                  .slice(-60)
+                  .map((m) => `[${m.nickname ?? t('sidebar.fallbackName')}] (${new Date(m.timestamp).toLocaleString()}): ${m.content}`)
+                  .join('\n');
+                const deepseek = new DeepSeekAPIProvider();
+                const result = await deepseek.execute({
+                  type: 29 as const,
+                  request_id: `summarize-${Date.now()}`,
+                  ai_type: 'summarize',
+                  msg: `Summarize the following conversation:\n\n${transcript}`,
+                });
+                setSummaryLocal(result?.msg ?? t('sidebar.noSummaryReturned'));
+              } catch (e) {
+                setSummaryLocal(`Error: ${String(e)}`);
+              } finally {
+                setIsSummarizingLocal(false);
+              }
+            }}
+            disabled={!activeConversation || isSummarizingLocal}
+            whileHover={{ scale: isSummarizingLocal ? 1 : 1.02 }}
+            whileTap={{ scale: isSummarizingLocal ? 1 : 0.98 }}
             className="mb-3 rounded-lg bg-dark-highlight px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSummarizing ? 'Generating summary...' : 'Generate summary'}
+            {isSummarizingLocal ? t('sidebar.generatingSummary') : t('sidebar.generateSummary')}
           </motion.button>
           <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-light-border bg-white/70 p-3 text-sm leading-relaxed text-light-text dark:border-dark-border dark:bg-dark-accent/60 dark:text-dark-text">
-            {summaryText || 'Choose a conversation and generate a concise summary.'}
+            {summaryLocal || t('sidebar.summaryDefault')}
           </div>
         </div>
       )}

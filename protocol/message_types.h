@@ -19,9 +19,9 @@ namespace lanchat {
 namespace protocol {
 
 // ============================================================
-// Message Type Enum (43 types)
+// Message Type Enum (51 types)
 // Types 0-19:  Legacy compatible (original graduation project)
-// Types 20-42: New for LanChat-Next
+// Types 20-50: New for LanChat-Next
 // ============================================================
 enum class MsgType : int {
     // --- Auth (0-4) ---
@@ -91,7 +91,19 @@ enum class MsgType : int {
     FriendRemoveReturn = 39,  // Server  Client: removal result
     FriendList         = 40,  // Client  Server: request friend list
     FriendListReturn   = 41,  // Server  Client: friend list
-    FriendOnline       = 42   // Server  Client: friend presence update
+    FriendOnline       = 42,  // Server  Client: friend presence update
+
+    // --- Message Operations (43-49) ---
+    MessageEdit        = 43,  // Client  Server: edit a sent message
+    MessageEditReturn  = 44,  // Server  Client: edit result / edit broadcast
+    MessageDelete      = 45,  // Client  Server: soft-delete a sent message
+    MessageDeleteReturn = 46, // Server  Client: delete result / delete broadcast
+    MessageReaction    = 47,  // Client  Server: add emoji reaction
+    MessageReactionReturn = 48, // Server  Client: reaction result / broadcast
+    ReadReceipt        = 49,  // Client  Server: mark message read
+
+    // --- Protocol Negotiation (50) ---
+    ProtocolHello      = 50   // Bidirectional: protocol version/features
 };
 
 // ============================================================
@@ -131,6 +143,14 @@ namespace field {
     constexpr const char* CONTENT    = "msg";
     constexpr const char* CONTENT_TYPE = "content_type";
     constexpr const char* REPLY_TO   = "reply_to";
+    constexpr const char* REACTION   = "reaction";
+    constexpr const char* EDITED_AT  = "edited_at";
+    constexpr const char* DELETED_AT = "deleted_at";
+    constexpr const char* READ_AT    = "read_at";
+    constexpr const char* READ_BY    = "read_by";
+    constexpr const char* VERSION    = "version";
+    constexpr const char* MIN_VERSION = "min_version";
+    constexpr const char* FEATURES   = "features";
 
     // Group
     constexpr const char* GROUP_ID   = "groupId";
@@ -182,11 +202,11 @@ namespace ai_type {
 // ============================================================
 inline int toInt(MsgType t) { return static_cast<int>(t); }
 inline MsgType fromInt(int v) {
-    if (v >= 0 && v <= 42) return static_cast<MsgType>(v);
+    if (v >= 0 && v <= 50) return static_cast<MsgType>(v);
     return static_cast<MsgType>(-1); // invalid
 }
 inline bool isLegacyType(MsgType t) { return static_cast<int>(t) <= 19; }
-inline bool isValidType(MsgType t) { return static_cast<int>(t) >= 0 && static_cast<int>(t) <= 42; }
+inline bool isValidType(MsgType t) { return static_cast<int>(t) >= 0 && static_cast<int>(t) <= 50; }
 
 } // namespace protocol
 } // namespace lanchat

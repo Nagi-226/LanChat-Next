@@ -1,9 +1,10 @@
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
 
-export function useChatInput(onSend: (content: string) => void, disabled = false) {
+export function useChatInput(onSend: (content: string) => void, disabled = false, onTyping?: () => void) {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastTypingAt = useRef(0);
 
   const resetInput = useCallback(() => {
     setInput('');
@@ -26,10 +27,15 @@ export function useChatInput(onSend: (content: string) => void, disabled = false
 
   const handleInput = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    const now = Date.now();
+    if (e.target.value.trim() && onTyping && now - lastTypingAt.current > 2500) {
+      lastTypingAt.current = now;
+      onTyping();
+    }
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, []);
+  }, [onTyping]);
 
   return {
     input,

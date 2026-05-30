@@ -4,6 +4,7 @@ import ClickSpark from '../lib/ClickSpark';
 import SpotlightCard from '../lib/SpotlightCard';
 import TextType from '../lib/TextType';
 import { ButtonSpinner } from '../lib/utils';
+import { useTranslation } from '../lib/i18n';
 
 interface RegisterPanelProps {
   onRegister: (nickname: string, password: string) => void;
@@ -13,6 +14,7 @@ interface RegisterPanelProps {
 }
 
 export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: RegisterPanelProps) {
+  const { t } = useTranslation();
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -25,19 +27,19 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
     setLocalError('');
 
     if (!nickname.trim()) {
-      setLocalError('Nickname is required');
+      setLocalError(t('register.validation.nicknameRequired'));
       return;
     }
     if (nickname.trim().length > 16) {
-      setLocalError('Nickname must be 16 characters or fewer');
+      setLocalError(t('register.validation.nicknameTooLong'));
       return;
     }
     if (password.length < 6) {
-      setLocalError('Password must be at least 6 characters');
+      setLocalError(t('register.validation.passwordTooShort'));
       return;
     }
     if (password !== confirm) {
-      setLocalError('Passwords do not match');
+      setLocalError(t('register.validation.passwordsMismatch'));
       return;
     }
 
@@ -52,7 +54,7 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
             <TextType text="Create account" loop={false} typingSpeed={40} />
           </h1>
           <p className="mb-6 text-center text-xs text-light-muted dark:text-dark-muted">
-            Join the local workspace
+            {t('register.subtitle')}
           </p>
 
           {displayError && (
@@ -62,36 +64,36 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
           )}
 
           <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-            Nickname
+            {t('register.nickname')}
           </label>
           <input
             type="text"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
-            placeholder="1-16 characters"
+            placeholder={t('register.nicknamePlaceholder')}
             autoFocus
             className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
           />
 
           <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-            Password
+            {t('register.password')}
           </label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
+            placeholder={t('register.passwordPlaceholder')}
             className="mb-4 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
           />
 
           <label className="mb-1 block text-xs font-medium text-light-muted dark:text-dark-muted">
-            Confirm password
+            {t('register.confirmPassword')}
           </label>
           <input
             type="password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Repeat password"
+            placeholder={t('register.confirmPasswordPlaceholder')}
             className="mb-6 w-full rounded-lg border border-light-border bg-white px-3 py-2.5 text-sm text-light-text placeholder-light-muted transition-colors focus:border-dark-highlight focus:outline-none dark:border-dark-accent dark:bg-dark-accent dark:text-dark-text dark:placeholder-dark-muted dark:focus:border-dark-highlight"
           />
 
@@ -105,18 +107,18 @@ export function RegisterPanel({ onRegister, onSwitchToLogin, error, loading }: R
               className="flex w-full items-center justify-center rounded-lg bg-dark-highlight px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#d63850] active:bg-[#c23045] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading && <ButtonSpinner />}
-              {loading ? 'Creating...' : 'Create account'}
+              {loading ? t('register.creating') : t('register.createAccount')}
             </motion.button>
           </ClickSpark>
 
           <p className="mt-4 text-center text-xs text-light-muted dark:text-dark-muted">
-            Already have an account?{' '}
+            {t('register.hasAccount')}{' '}
             <button
               type="button"
               onClick={onSwitchToLogin}
               className="font-medium text-dark-highlight hover:underline"
             >
-              Back to sign in
+              {t('register.backToSignIn')}
             </button>
           </p>
         </form>

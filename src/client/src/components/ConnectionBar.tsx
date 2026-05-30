@@ -2,8 +2,10 @@
 import { useConnectionStore } from '../stores/connectionStore';
 import ClickSpark from '../lib/ClickSpark';
 import ShinyText from '../lib/ShinyText';
+import { useTranslation } from '../lib/i18n';
 
 export function ConnectionBar() {
+  const { t } = useTranslation();
   const status = useConnectionStore((s) => s.status);
   const host = useConnectionStore((s) => s.host);
   const port = useConnectionStore((s) => s.port);
@@ -26,7 +28,7 @@ export function ConnectionBar() {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <label htmlFor="server-host" className="sr-only">
-        Server host
+        {t('connectionBar.host')}
       </label>
       <input
         id="server-host"
@@ -36,7 +38,7 @@ export function ConnectionBar() {
         className="w-28 rounded border border-light-border bg-light-sidebar px-2 py-1 text-light-text outline-none transition-colors focus:border-dark-highlight dark:border-dark-border dark:bg-dark-sidebar dark:text-dark-text"
       />
       <label htmlFor="server-port" className="sr-only">
-        Server port
+        {t('connectionBar.port')}
       </label>
       <input
         id="server-port"
@@ -49,7 +51,7 @@ export function ConnectionBar() {
 
       {recentServers.length > 0 && (
         <label className="flex items-center gap-1 text-light-muted dark:text-dark-muted">
-          <span className="sr-only">Recent server</span>
+          <span className="sr-only">{t('connectionBar.recentServer')}</span>
           <select
             value={selectedRecent >= 0 ? selectedRecent : ''}
             onChange={(e) => {
@@ -58,9 +60,9 @@ export function ConnectionBar() {
               if (server) selectServer(server);
             }}
             className="max-w-[150px] rounded border border-light-border bg-light-sidebar px-2 py-1 text-light-text outline-none focus:border-dark-highlight dark:border-dark-border dark:bg-dark-sidebar dark:text-dark-text"
-            aria-label="Select recent server"
+            aria-label={t('connectionBar.recentServers')}
           >
-            <option value="">Recent</option>
+            <option value="">{t('connectionBar.recent')}</option>
             {recentServers.map((server, index) => (
               <option key={`${server.host}:${server.port}`} value={index}>
                 {server.host}:{server.port}
@@ -79,16 +81,16 @@ export function ConnectionBar() {
             whileTap={{ scale: 0.95 }}
             className="rounded bg-light-accent px-3 py-1 text-white transition-opacity hover:opacity-80 dark:bg-dark-accent"
           >
-            Connect
+            {t('connectionBar.connect')}
           </motion.button>
         </ClickSpark>
       )}
       {status === 'connecting' && (
         <span className="flex items-center gap-1">
-          <ShinyText text={`Connecting...${retryTimer ? ` retry in ${Math.ceil(retryTimer / 1000)}s` : ''}`} color="#f59e0b" />
+          <ShinyText text={`${t('connectionBar.connecting')}${retryTimer ? ` ${t('connectionBar.retryIn', { seconds: Math.ceil(retryTimer / 1000) })}` : ''}`} color="#f59e0b" />
           {retryCount > 0 && (
             <span className="text-light-muted dark:text-dark-muted">
-              attempt {retryCount}/5
+              {t('connectionBar.attempt', { current: retryCount, max: 5 })}
             </span>
           )}
         </span>
@@ -96,11 +98,11 @@ export function ConnectionBar() {
       {status === 'connected' && (
         <>
           <span>
-            <ShinyText text="Connected" color="#22c55e" shineColor="#ffffff" />
+            <ShinyText text={t('connectionBar.connected')} color="#22c55e" shineColor="#ffffff" />
           </span>
           {heartbeatAgo !== null && (
             <span className="text-light-muted dark:text-dark-muted">
-              heartbeat {heartbeatAgo}s ago
+              {t('connectionBar.heartbeat', { seconds: heartbeatAgo })}
             </span>
           )}
           <motion.button
@@ -110,7 +112,7 @@ export function ConnectionBar() {
             whileTap={{ scale: 0.95 }}
             className="rounded bg-dark-highlight px-3 py-1 text-white transition-opacity hover:opacity-80"
           >
-            Disconnect
+            {t('connectionBar.disconnect')}
           </motion.button>
         </>
       )}
@@ -127,9 +129,9 @@ export function ConnectionBar() {
               type="button"
               onClick={dismissError}
               className="rounded px-1 hover:bg-red-500/10"
-              aria-label="Dismiss connection error"
+              aria-label={t('connectionBar.dismissError')}
             >
-              x
+              {t('connectionBar.dismiss')}
             </button>
           </motion.span>
         )}

@@ -18,6 +18,11 @@ struct StoredMessage {
     std::int64_t timestamp = 0;
     bool delivered = false;
     bool read = false;
+    bool edited = false;
+    bool deleted = false;
+    std::int64_t edited_at = 0;
+    std::int64_t deleted_at = 0;
+    std::string reactions;
 };
 
 class MessageRepository {
@@ -42,7 +47,10 @@ public:
     std::vector<StoredMessage> search(const std::string& keyword, int limit = 50);
 
     void markDelivered(std::int64_t msgId);
-    void markRead(std::int64_t msgId);
+    bool edit(std::int64_t msgId, int actorId, const std::string& content);
+    bool softDelete(std::int64_t msgId, int actorId);
+    bool addReaction(std::int64_t msgId, int actorId, const std::string& reaction);
+    bool markRead(std::int64_t msgId, int readerId = 0);
     Row toRow(const StoredMessage& message) const;
 
 private:

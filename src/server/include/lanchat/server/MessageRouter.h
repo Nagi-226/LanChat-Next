@@ -45,6 +45,8 @@ private:
                           const protocol_json::Object& request);
     void handleHistory(const std::shared_ptr<AsyncSession>& session,
                        const protocol_json::Object& request);
+    void handleFileTransfer(const std::shared_ptr<AsyncSession>& session,
+                            const protocol_json::Object& request);
     void handleAIRequest(const std::shared_ptr<AsyncSession>& session,
                          const protocol_json::Object& request);
     void handleProfileUpdate(const std::shared_ptr<AsyncSession>& session,
@@ -57,8 +59,24 @@ private:
                             const protocol_json::Object& request);
     void handleFriendList(const std::shared_ptr<AsyncSession>& session,
                           const protocol_json::Object& request);
+    void handleSystemBroadcast(const std::shared_ptr<AsyncSession>& session,
+                               const protocol_json::Object& request);
+    void handleMessageEdit(const std::shared_ptr<AsyncSession>& session,
+                           const protocol_json::Object& request);
+    void handleMessageDelete(const std::shared_ptr<AsyncSession>& session,
+                             const protocol_json::Object& request);
+    void handleMessageReaction(const std::shared_ptr<AsyncSession>& session,
+                               const protocol_json::Object& request);
+    void handleReadReceipt(const std::shared_ptr<AsyncSession>& session,
+                           const protocol_json::Object& request);
+    void handleProtocolHello(const std::shared_ptr<AsyncSession>& session,
+                             const protocol_json::Object& request);
 
     void deliverOffline(const std::shared_ptr<AsyncSession>& session, int userId);
+    void deliverToConversation(const std::string& payload,
+                               int senderId,
+                               int toId,
+                               int groupId);
     void broadcastPresence(lanchat::protocol::MsgType type, int userId);
     int authenticatedUserId(const std::shared_ptr<AsyncSession>& session,
                             const protocol_json::Object& request,

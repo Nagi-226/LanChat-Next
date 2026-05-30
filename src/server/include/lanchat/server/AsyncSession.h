@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mini_asio.hpp"
+#include "Net.h"
 
 #include <atomic>
 #include <chrono>
@@ -15,13 +15,13 @@ class TcpServer;
 
 class AsyncSession : public std::enable_shared_from_this<AsyncSession> {
 public:
-    AsyncSession(vendor::asio::io_context& ctx, TcpServer& server);
+    AsyncSession(net::io_context& ctx, TcpServer& server);
     ~AsyncSession();
 
     AsyncSession(const AsyncSession&) = delete;
     AsyncSession& operator=(const AsyncSession&) = delete;
 
-    vendor::asio::ip::tcp::socket& socket() { return socket_; }
+    net::ip::tcp::socket& socket() { return socket_; }
 
     void start();
     void deliver(const std::string& json);
@@ -42,9 +42,9 @@ private:
     void onMessage(const std::string& json);
     bool consumeRateLimitToken();
 
-    vendor::asio::io_context& ctx_;
+    net::io_context& ctx_;
     TcpServer& server_;
-    vendor::asio::ip::tcp::socket socket_;
+    net::ip::tcp::socket socket_;
     uint64_t id_;
     int user_id_ = 0;
 

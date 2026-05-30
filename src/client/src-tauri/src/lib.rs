@@ -1,6 +1,7 @@
 mod commands;
 mod message_codec;
 mod notifications;
+mod secure_store;
 mod tcp_manager;
 
 use tcp_manager::new_shared_manager;
@@ -20,6 +21,9 @@ pub fn run() {
             commands::connect,
             commands::disconnect,
             commands::send_raw_json,
+            commands::secure_store_set,
+            commands::secure_store_get,
+            commands::secure_store_delete,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run LanChat-Next client");

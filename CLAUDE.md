@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> Last updated: 2026-05-29
+> Last updated: 2026-05-30
 
 ## Project Identity
 
@@ -15,8 +15,8 @@ LanChat-Next is a LAN-based desktop instant messaging platform for small-to-medi
 ## Build & Verify Commands
 
 ```powershell
-# Full checkpoint verification (protocol audit + CMake + CTest + Vite + Cargo)
-./scripts/verify_v1_1_5.ps1
+# Full real-asio checkpoint verification (protocol audit + CMake + CTest + Vite + Cargo + 500-client smoke)
+./scripts/verify_v2_0_0_a1.ps1
 
 # Server only — configure, build, test
 cmake -S . -B build/server-next-vs
@@ -46,7 +46,7 @@ npm run tauri dev
 cd src/client
 cargo check
 
-# Protocol audit (34 schemas)
+# Protocol audit (51 schemas)
 node scripts/generate_protocol.mjs --check
 node scripts/audit_protocol.mjs
 
@@ -60,7 +60,7 @@ node tests/server_multi_client_smoke.mjs
 |-------|-----------|-------|
 | Server language | C++17 | `std::string_view`, structured bindings |
 | Server build | CMake 3.28+ | MSVC generator on Windows |
-| Server networking | mini-asio (vendored) | `vendor/mini_asio.hpp` — to be replaced with real asio or formally accepted |
+| Server networking | standalone Asio (vendored) | `vendor/asio/include`, exposed through `lanchat/server/Net.h` |
 | Server JSON | mini-json (vendored) | `vendor/mini_json.hpp` — nlohmann/json wrapper |
 | Server DB | SQLite + vendored wrapper | WAL mode, `vendor/sqlite/` |
 | Server logging | mini-spdlog (vendored) | `vendor/mini_spdlog.hpp` |
@@ -70,7 +70,7 @@ node tests/server_multi_client_smoke.mjs
 | Client styling | Tailwind CSS v3.4 | `class` dark mode, PostCSS |
 | Client state | Zustand 4.5 | `persist` middleware on uiStore only |
 | Client animation | React Bits components | Copied into `src/lib/`, adapted for Tailwind v3 |
-| Protocol | JSON over TCP, 4-byte BE length prefix | 34 message types, JSON Schema in `protocol/schemas/` |
+| Protocol | JSON over TCP, 4-byte BE length prefix | 51 message types (0–50), JSON Schema in `protocol/schemas/` |
 | Rust deps | tokio (net, io-util, sync, rt-multi-thread) | serde, serde_json |
 
 ## Directory Boundaries
@@ -137,23 +137,17 @@ Custom tokens use `dark-*` / `light-*` naming. Dark mode via `class` strategy �
 
 Custom widths: `w-sidebar` (240px), `w-panel` (320px). Custom radius: `rounded-bubble` (12px). Global transition: `300ms ease-in-out` on color/bg/border for all elements (defined in `global.css` on `*, *::before, *::after`).
 
-### Protocol (34 Message Types)
+### Protocol (51 Message Types)
 Defined in `protocol/protocol_definitions.json` as source of truth. TypeScript types in `protocol/message_types.ts`, C++ header in `protocol/message_types.h`.
 
 Key types: RegisterUser(0), Login(2), LoginSuccessReturn(3), SendMsg(5), ReceiveMsg(6), UserOnline(7), UserOffline(8), Heartbeat(20), HeartbeatAck(21), Logout(30).
 
 JSON Schemas in `protocol/schemas/`. Generated/audited by `scripts/generate_protocol.mjs` and `scripts/audit_protocol.mjs`.
 
-Frame format: `[4-byte BE uint32 length][JSON body]`. Max frame size: 4 MiB.
+Frame format: `[4-byte BE uint32 length][JSON body]`. Max frame size: 256 KiB.
 
 ### Message Dispatch Pattern
-`chatStore.handleIncomingMessage(raw)` is the single message router. It handles 5 types:
-- LoginSuccessReturn(3) — sets currentUser, contacts, groups, resets auth
-- ReceiveMsg(6) — pushes ChatMessage into messagesByContact[fromId]
-- UserOnline(7) / UserOffline(8) — updates contact status
-- Other valid types — silently ignored
-
-HeartbeatAck(21) is handled by App.tsx directly (calls `connectionStore.updateHeartbeat()`), bypassing the dispatcher.
+`chatStore.handleIncomingMessage(raw)` is the single message router handling **29 message types** across auth, chat, groups, friends, AI, system messages, and v1.9.0 features (edit/delete/reactions/read receipts/protocol negotiation). HeartbeatAck(21) is handled by App.tsx directly (calls `connectionStore.updateHeartbeat()`), bypassing the dispatcher.
 
 ## Development Conventions
 
@@ -196,15 +190,26 @@ All `Backgrounds/*` (full-page WebGL/Canvas, inappropriate for chat window). All
 
 ## Current Version State
 
-- **Latest checkpoint**: v1.7.0 — AI Assistant Panel + Friend System + Security Hardening. 2026-05-29 full-stack audit: 6-pillar PASS (5/6 pillars PASS, 1 WARN). All 5 C++ tests passing. See `docs/audit-report-2026-05-29.md`.
-- **Completed in this sprint**: DRY refactor (ChatArea/GroupChatArea shared hooks+components), connection hardening (reconnectTimer→store, max 5 retries), bcrypt password migration (sha256 auto-upgrade), rate limiting (20 msg/s per session), frame hardening (256 KiB limit), database indexes (9 expression indexes + migration framework), AI panel (search + summarize + AIService plugin arch), Friend system (protocol 34–42 + FriendRepository + 4 routing handlers + ContactList UI).
-- **Server**: TcpServer + AsyncSession (rate-limited), Database (indexed + migration v1), UserRepository (bcrypt+sha256 auto-upgrade), FriendRepository (direct SQLite), SessionPool, PresenceManager, MessageRouter (16 handlers), MessageRepository, ChannelRepository.
-- **Client**: ChatArea/GroupChatArea DRY (useChatScroll + useChatInput + ChatComponents), ContactList friend UI (Add/Remove/Accept/Reject), Sidebar AI panel (search + summarize + provider config), AIService plugin arch (LocalSearch + ClaudeAPI), connectionStore hardening.
-- **Protocol**: 43 message types (0–42). v1.2.0 — 9 friend system types added (34–42).
+- **Latest checkpoint**: v2.0.0-a1 — Real Asio transport. Server networking now builds on vendored standalone Asio and passes the 500-client load smoke. See `docs/V2_0_0_A1_CHECKPOINT.md`.
+- **Roadmap**: `docs/ROADMAP_v2.0.0.md` — 28 sub-versions across 3 phases to v2.0.0 production launch.
+- **Completed in Phase 2 (v2.0.0-a1)**: mini-asio replaced on the active server transport path with standalone Asio, `asio_transport` CTest added, and `scripts/verify_v2_0_0_a1.ps1` defaults to the 500-client load gate.
+- **Completed in Phase 1 (v1.8.1–v1.9.0)**: Message edit/delete/reaction, group create/join/leave UI, read receipts, protocol negotiation with incompatible-version rejection, file metadata relay, protocol E2E smoke, and 50-user load baseline.
+- **Completed in Phase 0 (v1.7.1–v1.8.0)**: Error Boundary crash resilience, Tauri encrypted API key storage, CSP security policy enabled, typing indicators (send + receive + display), offline message queue (localStorage persistence + auto-drain on reconnect), OS native notifications (tauri-plugin-notification), C++ build hardening (Release/Asan presets, /WX), CI/CD 4-layer gate scripts (pre-commit/pre-PR/quality-gate/db-migration-test), Vitest client test infrastructure.
+- **Completed prior (v1.7.0)**: DRY refactor, connection hardening, bcrypt migration, rate limiting, frame hardening, database indexes, AI panel (DeepSeek API v4-pro/v3/r1/flash), Friend system (protocol 34–42), full Chinese/English i18n (~140 keys).
+- **Server**: TcpServer + AsyncSession (rate-limited, heartbeat sweep, typing forwarding), Database (indexed + migration v1), UserRepository (bcrypt+sha256 auto-upgrade), FriendRepository (direct SQLite), MessageRepository (CRUD + search + edit/delete), SessionPool, PresenceManager, MessageRouter (**21 handlers**: RegisterUser, Login, Logout, SendMsg, SendGroupMsg, SendFile, CreateGroup, SearchGroup, JoinGroup, LeaveGroup, RequestHistory, AIRequest, UserProfileUpdate, FriendRequest, FriendAccept, FriendRemove, FriendList, SystemBroadcast, MessageEdit, MessageDelete, MessageReaction, ReadReceipt, ProtocolHello).
+- **Client**: chatStore split into 4 stores (authStore 95L + messageStore 715L + friendStore 164L + searchStore 148L). Components extracted: AppSplash, ShellFade, HeaderActions, ReconnectBanner, ContactRow, FriendRequestRow, GroupRow, ContactSkeleton. App.tsx 421L, ContactList.tsx 300L. All stores < 400L except messageStore (715L with 30-case handleIncomingMessage dispatcher).
+- **Protocol**: 51 message types (0–50). v1.9.0 adds message edit/delete/reaction, read receipts, and `ProtocolHello`; typing indicator uses ephemeral type 90+ (not stored, relay only).
 - **Graphify**: 8,826 nodes / 30,036 edges / 523 communities knowledge graph, AST-only (100% extracted). Git hooks auto-update.
-- **CI/CD**: 4-layer gate pipeline designed (L1 pre-commit / L2 pre-PR / L3 quality gate / L4 merge gate). Scripts pending at `scripts/gates/`.
-- **Audit tooling**: `codebase-health-audit` skill at `.claude/skills/codebase-health-audit/SKILL.md`.
-- **Still deferred**: real asio (mini-asio still vendored), real spdlog, heartbeat timeout sweep, longer load soak, Tauri keyring for API key storage.
+- **CI/CD**: 4-layer gate scripts implemented at `scripts/gates/` (pre-commit.ps1, pre-pr.ps1, quality-gate.ps1, db-migration-test.ps1).
+- **Audit tooling**: `codebase-health-audit` skill at `.claude/skills/codebase-health-audit/SKILL.md`. Latest audits: `docs/audit-report-2026-05-30-v2.0.0-a1.md` (v2.0.0-a1), `docs/audit-report-2026-05-30-v1.9.0.md` (v1.9.0), `docs/audit-report-2026-05-30.md` (v1.8.0).
+- **Critical deferred (v2.0.0 blockers)**:
+  - real-asio 30-minute soak remains before final v2.0.0 (500-client smoke passes)
+  - mini-spdlog → real spdlog (async logging, structured logs)
+  - mini-json → nlohmann/json (full JSON compliance)
+  - Database JSON-document-table → normalized schema (loads entire table into memory per mutation)
+  - bcrypt blocks event loop → offload to worker threads
+  - Desktop Playwright E2E coverage still needs expansion beyond protocol/load smoke
+  - Protocol version negotiation exists; compatibility matrix tests still need expansion before v2.0.0
 
 ## Key Constraints
 

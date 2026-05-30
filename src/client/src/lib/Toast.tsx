@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslation } from './i18n';
 
 export type ToastType = 'info' | 'error' | 'success';
 
@@ -21,6 +22,7 @@ const toneClass: Record<ToastType, string> = {
 };
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
+  const { t } = useTranslation();
   useEffect(() => {
     const timer = setTimeout(() => onDismiss(toast.id), 4200);
     return () => clearTimeout(timer);
@@ -42,7 +44,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
         type="button"
         onClick={() => onDismiss(toast.id)}
         className="rounded px-1 text-xs opacity-70 hover:opacity-100"
-        aria-label="Dismiss notification"
+        aria-label={t('toast.dismiss')}
       >
         x
       </button>

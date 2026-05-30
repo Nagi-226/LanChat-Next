@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lanchat-next.local/protocol/schemas/messageEdit.schema.json",
+  "title": "LanChat messageEdit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "fromId",
+    "msg_id",
+    "msg"
+  ],
+  "properties": {
+    "type": {
+      "const": 43
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "msg_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "fromId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "msg": {
+      "type": "string",
+      "maxLength": 65536
+    },
+    "toId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "groupId": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "$defs": {
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "nickname"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "headId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error",
+            "failed",
+            "start",
+            "done"
+          ]
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "groupId",
+        "name"
+      ],
+      "properties": {
+        "groupId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "hostId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/user"
+          }
+        }
+      }
+    }
+  }
+}

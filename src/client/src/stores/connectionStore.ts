@@ -1,6 +1,7 @@
 ﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../lib/i18n';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -92,7 +93,7 @@ export const useConnectionStore = create<ConnectionState>()(
       sendRawJson: async (json) => {
         const { status } = get();
         if (status !== 'connected') {
-          throw new Error('not connected');
+          throw new Error(t('store.notConnected'));
         }
         await invoke('send_raw_json', { json });
       },
@@ -105,7 +106,7 @@ export const useConnectionStore = create<ConnectionState>()(
         if (retryCount >= MAX_RECONNECT_ATTEMPTS) {
           set({
             status: 'disconnected',
-            error: `Reconnect stopped after ${MAX_RECONNECT_ATTEMPTS} attempts.`,
+            error: t('store.reconnectStopped', { count: MAX_RECONNECT_ATTEMPTS }),
             retryTimer: null,
             retryDueAt: null,
             reconnectTimer: null,

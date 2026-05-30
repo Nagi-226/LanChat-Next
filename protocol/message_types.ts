@@ -45,6 +45,14 @@ export enum MsgType {
   FriendList = 40,
   FriendListReturn = 41,
   FriendOnline = 42,
+  MessageEdit = 43,
+  MessageEditReturn = 44,
+  MessageDelete = 45,
+  MessageDeleteReturn = 46,
+  MessageReaction = 47,
+  MessageReactionReturn = 48,
+  ReadReceipt = 49,
+  ProtocolHello = 50,
 }
 
 export type ContentType = 'text' | 'image' | 'file' | 'system';
@@ -395,6 +403,87 @@ export interface FriendOnlineMessage extends ProtocolMessageBase {
   headId?: number;
 }
 
+export interface MessageEditMessage extends ProtocolMessageBase {
+  type: MsgType.MessageEdit;
+  fromId: number;
+  msg_id: string;
+  msg: string;
+  toId?: number;
+  groupId?: number;
+}
+
+export interface MessageEditReturnMessage extends ProtocolMessageBase {
+  type: MsgType.MessageEditReturn;
+  status: ProtocolStatus;
+  msg_id: string;
+  msg?: string;
+  code?: number;
+  edited_at?: number;
+  fromId?: number;
+  toId?: number;
+  groupId?: number;
+}
+
+export interface MessageDeleteMessage extends ProtocolMessageBase {
+  type: MsgType.MessageDelete;
+  fromId: number;
+  msg_id: string;
+  toId?: number;
+  groupId?: number;
+}
+
+export interface MessageDeleteReturnMessage extends ProtocolMessageBase {
+  type: MsgType.MessageDeleteReturn;
+  status: ProtocolStatus;
+  msg_id: string;
+  msg?: string;
+  code?: number;
+  deleted_at?: number;
+  fromId?: number;
+  toId?: number;
+  groupId?: number;
+}
+
+export interface MessageReactionMessage extends ProtocolMessageBase {
+  type: MsgType.MessageReaction;
+  fromId: number;
+  msg_id: string;
+  reaction: string;
+  toId?: number;
+  groupId?: number;
+}
+
+export interface MessageReactionReturnMessage extends ProtocolMessageBase {
+  type: MsgType.MessageReactionReturn;
+  status: ProtocolStatus;
+  msg_id: string;
+  reaction: string;
+  msg?: string;
+  code?: number;
+  fromId?: number;
+  toId?: number;
+  groupId?: number;
+}
+
+export interface ReadReceiptMessage extends ProtocolMessageBase {
+  type: MsgType.ReadReceipt;
+  fromId: number;
+  msg_id: string;
+  toId?: number;
+  groupId?: number;
+  read_at?: number;
+  read_by?: number;
+}
+
+export interface ProtocolHelloMessage extends ProtocolMessageBase {
+  type: MsgType.ProtocolHello;
+  version: number;
+  min_version?: number;
+  features?: string[];
+  status?: ProtocolStatus;
+  msg?: string;
+}
+
 export type ProtocolMessage =
   RegisterUserMessage |
   RegisterUserReturnMessage |
@@ -438,7 +527,15 @@ export type ProtocolMessage =
   FriendRemoveReturnMessage |
   FriendListMessage |
   FriendListReturnMessage |
-  FriendOnlineMessage;
+  FriendOnlineMessage |
+  MessageEditMessage |
+  MessageEditReturnMessage |
+  MessageDeleteMessage |
+  MessageDeleteReturnMessage |
+  MessageReactionMessage |
+  MessageReactionReturnMessage |
+  ReadReceiptMessage |
+  ProtocolHelloMessage;
 
 export const MSG_TYPE_NAMES: Record<MsgType, string> = {
   [MsgType.RegisterUser]: 'registerUser',
@@ -484,9 +581,17 @@ export const MSG_TYPE_NAMES: Record<MsgType, string> = {
   [MsgType.FriendList]: 'friendList',
   [MsgType.FriendListReturn]: 'friendListReturn',
   [MsgType.FriendOnline]: 'friendOnline',
+  [MsgType.MessageEdit]: 'messageEdit',
+  [MsgType.MessageEditReturn]: 'messageEditReturn',
+  [MsgType.MessageDelete]: 'messageDelete',
+  [MsgType.MessageDeleteReturn]: 'messageDeleteReturn',
+  [MsgType.MessageReaction]: 'messageReaction',
+  [MsgType.MessageReactionReturn]: 'messageReactionReturn',
+  [MsgType.ReadReceipt]: 'readReceipt',
+  [MsgType.ProtocolHello]: 'protocolHello',
 };
 
 export function isValidMsgType(value: number): value is MsgType {
-  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.FriendOnline;
+  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.ProtocolHello;
 }
 

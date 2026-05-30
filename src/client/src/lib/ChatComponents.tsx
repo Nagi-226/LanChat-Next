@@ -2,6 +2,7 @@ import type { ChangeEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ClickSpark from './ClickSpark';
 import { MessageSkeleton } from './utils';
+import { useTranslation } from './i18n';
 
 interface NewMessagesFABProps {
   count: number;
@@ -9,7 +10,9 @@ interface NewMessagesFABProps {
   onClick: () => void;
 }
 
-export function NewMessagesFAB({ count, label = 'new messages', onClick }: NewMessagesFABProps) {
+export function NewMessagesFAB({ count, label, onClick }: NewMessagesFABProps) {
+  const { t } = useTranslation();
+  const displayLabel = label ?? t('chatComponents.newMessages');
   return (
     <motion.button
       type="button"
@@ -19,9 +22,9 @@ export function NewMessagesFAB({ count, label = 'new messages', onClick }: NewMe
       exit={{ opacity: 0, y: 12, scale: 0.95 }}
       transition={{ type: 'spring', stiffness: 420, damping: 30 }}
       className="absolute bottom-3 right-4 rounded-full border border-dark-highlight/30 bg-dark-highlight/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur hover:bg-dark-highlight"
-      aria-label={`Jump to ${count || ''} ${label}`.trim()}
+      aria-label={`Jump to ${count || ''} ${displayLabel}`.trim()}
     >
-      New messages{count > 0 ? ` (${count})` : ''}
+      {t('chatComponents.newMessages')}{count > 0 ? ` (${count})` : ''}
     </motion.button>
   );
 }
@@ -87,6 +90,7 @@ export function MessageComposer({
   onKeyDown,
   onSend,
 }: MessageComposerProps) {
+  const { t } = useTranslation();
   const sendDisabled = disabled || !input.trim();
 
   return (
@@ -102,7 +106,7 @@ export function MessageComposer({
             value={input}
             onChange={onInput}
             onKeyDown={onKeyDown}
-            placeholder={disabled ? 'Disconnected...' : placeholder}
+            placeholder={placeholder}
             disabled={disabled}
             title={disabled ? disabledTitle : undefined}
             rows={1}
@@ -114,7 +118,7 @@ export function MessageComposer({
             type="button"
             onClick={onSend}
             disabled={sendDisabled}
-            title={disabled ? (disabledTitle ?? 'Not connected') : undefined}
+            title={disabled ? (disabledTitle ?? t('chat.notConnected')) : undefined}
             whileHover={{ scale: sendDisabled ? 1 : 1.05 }}
             whileTap={{ scale: sendDisabled ? 1 : 0.95 }}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-dark-highlight text-white transition-colors hover:bg-[#d63850] disabled:cursor-not-allowed disabled:opacity-50"

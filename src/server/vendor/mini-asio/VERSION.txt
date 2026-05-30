@@ -1,5 +1,0 @@
-mini-asio v1.0.0
-Minimal asio-compatible async I/O library for LanChat-Next.
-Replaces: asio standalone 1.28.2
-Upstream: https://think-async.com/Asio/
-Note: Self-contained implementation. Replace with real asio when network is available.

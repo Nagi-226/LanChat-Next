@@ -8,7 +8,7 @@ namespace lanchat::server {
 
 std::atomic<uint64_t> AsyncSession::next_id_{1};
 
-AsyncSession::AsyncSession(vendor::asio::io_context& ctx, TcpServer& server)
+AsyncSession::AsyncSession(net::io_context& ctx, TcpServer& server)
     : ctx_(ctx), server_(server), socket_(ctx), id_(next_id_.fetch_add(1, std::memory_order_relaxed)) {
     last_heartbeat_ = std::chrono::steady_clock::now();
     rate_window_start_ = last_heartbeat_;
@@ -41,8 +41,8 @@ void AsyncSession::close() {
 
 void AsyncSession::doRead() {
     auto self = shared_from_this();
-    socket_.async_read_some(read_buffer_.data(), read_buffer_.size(),
-        [this, self](vendor::asio::error_code ec, size_t bytes) {
+    socket_.async_read_some(net::buffer(read_buffer_),
+        [this, self](const net::error_code& ec, size_t bytes) {
             if (ec) {
                 ServerLogger::instance().info(
                     "session " + std::to_string(id_) + " read error, closing");
@@ -76,8 +76,8 @@ void AsyncSession::doWrite() {
     writing_ = true;
     auto self = shared_from_this();
     auto& front = write_queue_.front();
-    socket_.async_write_some(front.data() + write_offset_, front.size() - write_offset_,
-        [this, self](vendor::asio::error_code ec, size_t bytes) {
+    socket_.async_write_some(net::buffer(front.data() + write_offset_, front.size() - write_offset_),
+        [this, self](const net::error_code& ec, size_t bytes) {
             if (ec) {
                 write_queue_.clear();
                 write_offset_ = 0;

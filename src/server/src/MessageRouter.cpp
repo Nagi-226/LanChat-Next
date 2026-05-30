@@ -3,6 +3,7 @@
 #include "lanchat/server/ServerLogger.h"
 
 #include <algorithm>
+#include <ctime>
 #include <sstream>
 
 namespace lanchat::server {
@@ -50,7 +51,18 @@ Object messageToJson(MsgType type, const db::StoredMessage& message) {
     obj["content_type"] = Value(message.content_type);
     obj["timestamp"] = Value(message.timestamp);
     obj["read"] = Value(message.read);
+    obj["edited"] = Value(message.edited);
+    obj["deleted"] = Value(message.deleted);
+    obj["edited_at"] = Value(message.edited_at);
+    obj["deleted_at"] = Value(message.deleted_at);
+    if (!message.reactions.empty()) {
+        obj["reactions"] = Value(message.reactions);
+    }
     return obj;
+}
+
+std::int64_t nowSeconds() {
+    return static_cast<std::int64_t>(std::time(nullptr));
 }
 
 Array messagesToArray(const std::vector<db::StoredMessage>& messages) {
@@ -130,6 +142,7 @@ void MessageRouter::route(const std::shared_ptr<AsyncSession>& session, const st
         case MsgType::Logout:             handleLogout(session, request); break;
         case MsgType::SendMsg:            handlePrivateMessage(session, request); break;
         case MsgType::SendGroupMsg:       handleGroupMessage(session, request); break;
+        case MsgType::SendFile:           handleFileTransfer(session, request); break;
         case MsgType::CreateGroup:        handleCreateGroup(session, request); break;
         case MsgType::SearchGroup:        handleSearchGroup(session, request); break;
         case MsgType::JoinGroup:          handleJoinGroup(session, request); break;
@@ -141,11 +154,44 @@ void MessageRouter::route(const std::shared_ptr<AsyncSession>& session, const st
         case MsgType::FriendAccept:       handleFriendAccept(session, request); break;
         case MsgType::FriendRemove:       handleFriendRemove(session, request); break;
         case MsgType::FriendList:         handleFriendList(session, request); break;
+        case MsgType::SystemBroadcast:    handleSystemBroadcast(session, request); break;
+        case MsgType::MessageEdit:        handleMessageEdit(session, request); break;
+        case MsgType::MessageDelete:      handleMessageDelete(session, request); break;
+        case MsgType::MessageReaction:    handleMessageReaction(session, request); break;
+        case MsgType::ReadReceipt:        handleReadReceipt(session, request); break;
+        case MsgType::ProtocolHello:      handleProtocolHello(session, request); break;
         default:
             session->deliver(protocol_json::ok(
                 MsgType::SystemBroadcast,
                 "server-next v1.2.0 routed frame"));
             break;
+    }
+}
+
+void MessageRouter::deliverToConversation(
+    const std::string& payload,
+    int senderId,
+    int toId,
+    int groupId) {
+    if (groupId > 0) {
+        for (const int memberId : channels_.members(groupId)) {
+            auto target = sessions_.findByUserId(memberId);
+            if (target) {
+                target->deliver(payload);
+            }
+        }
+        return;
+    }
+
+    auto sender = sessions_.findByUserId(senderId);
+    if (sender) {
+        sender->deliver(payload);
+    }
+    if (toId > 0 && toId != senderId) {
+        auto target = sessions_.findByUserId(toId);
+        if (target) {
+            target->deliver(payload);
+        }
     }
 }
 
@@ -384,6 +430,165 @@ void MessageRouter::handleHistory(
     session->deliver(protocol_json::serialize(response));
 }
 
+void MessageRouter::handleFileTransfer(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    const int toId = protocol_json::intField(request, "toId");
+    const int groupId = protocol_json::intField(request, "groupId");
+    const std::string fileName = protocol_json::stringField(request, "file_name");
+    const std::string fileHash = protocol_json::stringField(request, "file_hash");
+    if (fromId <= 0 || fileName.empty() || fileHash.empty() || (toId <= 0 && groupId <= 0)) {
+        session->deliver(protocol_json::error(MsgType::FileTransferDone, 400, "fromId, target and file metadata required"));
+        return;
+    }
+
+    Object incoming = request;
+    incoming["type"] = Value(lanchat::protocol::toInt(MsgType::ReceiveFile));
+    const std::string payload = protocol_json::serialize(incoming);
+    deliverToConversation(payload, fromId, toId, groupId);
+
+    Object done;
+    done["type"] = Value(lanchat::protocol::toInt(MsgType::FileTransferDone));
+    done["status"] = Value("ok");
+    done["file_hash"] = Value(fileHash);
+    done["msg"] = Value("file metadata delivered");
+    session->deliver(protocol_json::serialize(done));
+}
+
+void MessageRouter::handleMessageEdit(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    const std::int64_t msgId = protocol_json::int64Field(request, "msg_id");
+    const std::string content = protocol_json::stringField(request, "msg");
+    const int toId = protocol_json::intField(request, "toId");
+    const int groupId = protocol_json::intField(request, "groupId");
+    const bool ok = fromId > 0 && msgId > 0 && messages_.edit(msgId, fromId, content);
+
+    Object response;
+    response["type"] = Value(lanchat::protocol::toInt(MsgType::MessageEditReturn));
+    response["status"] = Value(ok ? "ok" : "error");
+    response["msg_id"] = Value(msgId);
+    response["fromId"] = Value(fromId);
+    response["msg"] = Value(ok ? content : "message edit failed");
+    response["edited_at"] = Value(nowSeconds());
+    if (toId > 0) response["toId"] = Value(toId);
+    if (groupId > 0) response["groupId"] = Value(groupId);
+    const auto payload = protocol_json::serialize(response);
+    if (ok) {
+        deliverToConversation(payload, fromId, toId, groupId);
+    } else {
+        session->deliver(payload);
+    }
+}
+
+void MessageRouter::handleMessageDelete(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    const std::int64_t msgId = protocol_json::int64Field(request, "msg_id");
+    const int toId = protocol_json::intField(request, "toId");
+    const int groupId = protocol_json::intField(request, "groupId");
+    const bool ok = fromId > 0 && msgId > 0 && messages_.softDelete(msgId, fromId);
+
+    Object response;
+    response["type"] = Value(lanchat::protocol::toInt(MsgType::MessageDeleteReturn));
+    response["status"] = Value(ok ? "ok" : "error");
+    response["msg_id"] = Value(msgId);
+    response["fromId"] = Value(fromId);
+    response["msg"] = Value(ok ? "deleted" : "message delete failed");
+    response["deleted_at"] = Value(nowSeconds());
+    if (toId > 0) response["toId"] = Value(toId);
+    if (groupId > 0) response["groupId"] = Value(groupId);
+    const auto payload = protocol_json::serialize(response);
+    if (ok) {
+        deliverToConversation(payload, fromId, toId, groupId);
+    } else {
+        session->deliver(payload);
+    }
+}
+
+void MessageRouter::handleMessageReaction(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    const std::int64_t msgId = protocol_json::int64Field(request, "msg_id");
+    const std::string reaction = protocol_json::stringField(request, "reaction");
+    const int toId = protocol_json::intField(request, "toId");
+    const int groupId = protocol_json::intField(request, "groupId");
+    const bool ok = fromId > 0 && msgId > 0 && messages_.addReaction(msgId, fromId, reaction);
+
+    Object response;
+    response["type"] = Value(lanchat::protocol::toInt(MsgType::MessageReactionReturn));
+    response["status"] = Value(ok ? "ok" : "error");
+    response["msg_id"] = Value(msgId);
+    response["fromId"] = Value(fromId);
+    response["reaction"] = Value(reaction);
+    response["msg"] = Value(ok ? "reaction added" : "reaction failed");
+    if (toId > 0) response["toId"] = Value(toId);
+    if (groupId > 0) response["groupId"] = Value(groupId);
+    const auto payload = protocol_json::serialize(response);
+    if (ok) {
+        deliverToConversation(payload, fromId, toId, groupId);
+    } else {
+        session->deliver(payload);
+    }
+}
+
+void MessageRouter::handleReadReceipt(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    const std::int64_t msgId = protocol_json::int64Field(request, "msg_id");
+    const int toId = protocol_json::intField(request, "toId");
+    const int groupId = protocol_json::intField(request, "groupId");
+    if (fromId <= 0 || msgId <= 0 || !messages_.markRead(msgId, fromId)) {
+        session->deliver(protocol_json::error(MsgType::SystemBroadcast, 400, "read receipt failed"));
+        return;
+    }
+
+    Object response = request;
+    response["type"] = Value(lanchat::protocol::toInt(MsgType::ReadReceipt));
+    response["read_by"] = Value(fromId);
+    response["read_at"] = Value(nowSeconds());
+    const auto payload = protocol_json::serialize(response);
+    deliverToConversation(payload, fromId, toId, groupId);
+}
+
+void MessageRouter::handleProtocolHello(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    constexpr int serverVersion = 2;
+    constexpr int serverMinVersion = 1;
+    const int clientVersion = protocol_json::intField(request, "version", serverMinVersion);
+    const int clientMinVersion = protocol_json::intField(request, "min_version", clientVersion);
+    const bool compatible =
+        clientVersion >= serverMinVersion && clientMinVersion <= serverVersion;
+
+    Array features;
+    for (const std::string& feature : {
+        "message_edit",
+        "message_delete",
+        "message_reaction",
+        "read_receipt",
+        "file_metadata",
+        "profile_update"
+    }) {
+        features.push_back(Value(feature));
+    }
+    Object response;
+    response["type"] = Value(lanchat::protocol::toInt(MsgType::ProtocolHello));
+    response["version"] = Value(static_cast<std::int64_t>(serverVersion));
+    response["min_version"] = Value(static_cast<std::int64_t>(serverMinVersion));
+    response["status"] = Value(compatible ? "ok" : "error");
+    if (!compatible) {
+        response["msg"] = Value("incompatible protocol version");
+    }
+    response["features"] = Value(features);
+    session->deliver(protocol_json::serialize(response));
+}
+
 void MessageRouter::handleAIRequest(
     const std::shared_ptr<AsyncSession>& session,
     const Object& request) {
@@ -534,6 +739,43 @@ void MessageRouter::handleFriendList(
     response["type"] = Value(lanchat::protocol::toInt(MsgType::FriendListReturn));
     response["friends"] = Value(friends);
     session->deliver(protocol_json::serialize(response));
+}
+
+void MessageRouter::handleSystemBroadcast(
+    const std::shared_ptr<AsyncSession>& session,
+    const Object& request) {
+    const std::string event = protocol_json::stringField(request, "event");
+    if (event != "typing") {
+        session->deliver(protocol_json::ok(MsgType::SystemBroadcast, "broadcast ignored"));
+        return;
+    }
+
+    const int fromId = authenticatedUserId(session, request, "fromId");
+    if (fromId <= 0) {
+        session->deliver(protocol_json::error(MsgType::SystemBroadcast, 401, "typing requires authenticated sender"));
+        return;
+    }
+
+    const std::string payload = protocol_json::serialize(request);
+    const int toId = protocol_json::intField(request, "toId");
+    if (toId > 0) {
+        auto target = sessions_.findByUserId(toId);
+        if (target) {
+            target->deliver(payload);
+        }
+        return;
+    }
+
+    const int groupId = protocol_json::intField(request, "groupId");
+    if (groupId > 0) {
+        for (const int memberId : channels_.members(groupId)) {
+            if (memberId == fromId) continue;
+            auto target = sessions_.findByUserId(memberId);
+            if (target) {
+                target->deliver(payload);
+            }
+        }
+    }
 }
 
 void MessageRouter::handleProfileUpdate(

@@ -48,6 +48,10 @@ bool asBool(const Row& row, const std::string& key, bool fallback = false) {
     return fallback;
 }
 
+std::int64_t nowSeconds() {
+    return static_cast<std::int64_t>(std::time(nullptr));
+}
+
 void trimToLimit(std::vector<StoredMessage>& messages, int limit) {
     std::sort(messages.begin(), messages.end(), [](const auto& a, const auto& b) {
         return a.timestamp < b.timestamp;
@@ -75,7 +79,7 @@ StoredMessage MessageRepository::savePrivate(
     message.to_id = toId;
     message.content = content;
     message.content_type = contentType.empty() ? "text" : contentType;
-    message.timestamp = static_cast<std::int64_t>(std::time(nullptr));
+    message.timestamp = nowSeconds();
     message.delivered = delivered;
 
     db_.insert("messages", toRow(message));
@@ -93,7 +97,7 @@ StoredMessage MessageRepository::saveGroup(
     message.group_id = groupId;
     message.content = content;
     message.content_type = contentType.empty() ? "text" : contentType;
-    message.timestamp = static_cast<std::int64_t>(std::time(nullptr));
+    message.timestamp = nowSeconds();
     message.delivered = true;
 
     db_.insert("messages", toRow(message));
@@ -176,12 +180,67 @@ void MessageRepository::markDelivered(std::int64_t msgId) {
     });
 }
 
-void MessageRepository::markRead(std::int64_t msgId) {
+bool MessageRepository::edit(std::int64_t msgId, int actorId, const std::string& content) {
+    bool updated = false;
+    db_.update("messages", [msgId, actorId, &content](const Row& row) {
+        return asInt64(row, "msg_id") == msgId
+            && asInt(row, "from_id") == actorId
+            && !asBool(row, "deleted")
+            && !content.empty();
+    }, [&updated, &content](Row& row) {
+        row["content"] = vendor::json::Value(content);
+        row["edited"] = vendor::json::Value(true);
+        row["edited_at"] = vendor::json::Value(nowSeconds());
+        updated = true;
+    });
+    return updated;
+}
+
+bool MessageRepository::softDelete(std::int64_t msgId, int actorId) {
+    bool updated = false;
+    db_.update("messages", [msgId, actorId](const Row& row) {
+        return asInt64(row, "msg_id") == msgId
+            && asInt(row, "from_id") == actorId
+            && !asBool(row, "deleted");
+    }, [&updated](Row& row) {
+        row["content"] = vendor::json::Value("");
+        row["deleted"] = vendor::json::Value(true);
+        row["deleted_at"] = vendor::json::Value(nowSeconds());
+        updated = true;
+    });
+    return updated;
+}
+
+bool MessageRepository::addReaction(std::int64_t msgId, int actorId, const std::string& reaction) {
+    if (reaction.empty()) {
+        return false;
+    }
+    bool updated = false;
+    const std::string encoded = std::to_string(actorId) + ":" + reaction;
+    db_.update("messages", [msgId](const Row& row) {
+        return asInt64(row, "msg_id") == msgId && !asBool(row, "deleted");
+    }, [&updated, &encoded](Row& row) {
+        const std::string current = asString(row, "reactions");
+        if (current.find(encoded) != std::string::npos) {
+            updated = true;
+            return;
+        }
+        row["reactions"] = vendor::json::Value(current.empty() ? encoded : current + "," + encoded);
+        updated = true;
+    });
+    return updated;
+}
+
+bool MessageRepository::markRead(std::int64_t msgId, int readerId) {
+    bool updated = false;
     db_.update("messages", [msgId](const Row& row) {
         return asInt64(row, "msg_id") == msgId;
-    }, [](Row& row) {
+    }, [&updated, readerId](Row& row) {
         row["read"] = vendor::json::Value(true);
+        row["read_by"] = vendor::json::Value(static_cast<std::int64_t>(readerId));
+        updated = true;
     });
+    return updated;
 }
 
 Row MessageRepository::toRow(const StoredMessage& message) const {
@@ -195,6 +254,11 @@ Row MessageRepository::toRow(const StoredMessage& message) const {
     row["timestamp"] = vendor::json::Value(message.timestamp);
     row["delivered"] = vendor::json::Value(message.delivered);
     row["read"] = vendor::json::Value(message.read);
+    row["edited"] = vendor::json::Value(message.edited);
+    row["deleted"] = vendor::json::Value(message.deleted);
+    row["edited_at"] = vendor::json::Value(message.edited_at);
+    row["deleted_at"] = vendor::json::Value(message.deleted_at);
+    row["reactions"] = vendor::json::Value(message.reactions);
     return row;
 }
 
@@ -209,6 +273,11 @@ StoredMessage MessageRepository::fromRow(const Row& row) const {
     message.timestamp = asInt64(row, "timestamp");
     message.delivered = asBool(row, "delivered");
     message.read = asBool(row, "read");
+    message.edited = asBool(row, "edited");
+    message.deleted = asBool(row, "deleted");
+    message.edited_at = asInt64(row, "edited_at");
+    message.deleted_at = asInt64(row, "deleted_at");
+    message.reactions = asString(row, "reactions");
     return message;
 }
 
