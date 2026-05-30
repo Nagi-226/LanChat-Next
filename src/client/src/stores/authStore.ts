@@ -8,6 +8,41 @@ import type { LoginMessage, RegisterUserMessage } from '../../../../protocol/mes
 import { MsgType } from '../../../../protocol/message_types';
 import type { AuthState, CurrentUser } from './types';
 
+const LAST_PASSWORD_KEY = 'lanchat-last-password';
+let authRequestSeq = 0;
+let authTimeoutId: number | null = null;
+
+function beginAuthRequest(setAuthError: (error: string | null) => void, timeoutMessage: string): number {
+  if (authTimeoutId !== null) {
+    window.clearTimeout(authTimeoutId);
+  }
+
+  const requestSeq = ++authRequestSeq;
+  authTimeoutId = window.setTimeout(() => {
+    const state = useAuthStore.getState();
+    if (requestSeq === authRequestSeq && state.auth.loading) {
+      state.setAuthError(timeoutMessage);
+    }
+  }, 12000);
+
+  setAuthError(null);
+  return requestSeq;
+}
+
+async function ensureConnected(): Promise<void> {
+  const connection = useConnectionStore.getState();
+  if (connection.status === 'connected') return;
+  if (connection.status === 'connecting') {
+    throw new Error(t('connectionBar.connecting'));
+  }
+
+  await connection.connect(connection.host, connection.port);
+
+  if (useConnectionStore.getState().status !== 'connected') {
+    throw new Error(useConnectionStore.getState().error || t('store.notConnected'));
+  }
+}
+
 interface AuthStore {
   auth: AuthState;
   setAuthView: (view: 'login' | 'register') => void;
@@ -34,14 +69,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
   login: async (id, password) => {
     const { setAuthLoading, setAuthError } = get();
     setAuthLoading(true);
-    setAuthError(null);
-
-    const timeoutId = window.setTimeout(() => {
-      const state = get();
-      if (state.auth.loading) {
-        state.setAuthError(t('store.loginTimeout'));
-      }
-    }, 12000);
+    const requestSeq = beginAuthRequest(setAuthError, t('store.loginTimeout'));
 
     const loginMsg: LoginMessage = {
       type: MsgType.Login,
@@ -50,24 +78,19 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     };
 
     try {
+      await ensureConnected();
       await useConnectionStore.getState().sendRawJson(JSON.stringify(loginMsg));
     } catch (e) {
-      window.clearTimeout(timeoutId);
-      setAuthError(String(e));
+      if (requestSeq === authRequestSeq) {
+        setAuthError(String(e));
+      }
     }
   },
 
   register: async (nickname, password) => {
     const { setAuthLoading, setAuthError } = get();
     setAuthLoading(true);
-    setAuthError(null);
-
-    const timeoutId = window.setTimeout(() => {
-      const state = get();
-      if (state.auth.loading) {
-        state.setAuthError(t('store.registerTimeout'));
-      }
-    }, 12000);
+    const requestSeq = beginAuthRequest(setAuthError, t('store.registerTimeout'));
 
     const regMsg: RegisterUserMessage = {
       type: MsgType.RegisterUser,
@@ -76,10 +99,13 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     };
 
     try {
+      await ensureConnected();
       await useConnectionStore.getState().sendRawJson(JSON.stringify(regMsg));
+      window.localStorage.setItem(LAST_PASSWORD_KEY, password);
     } catch (e) {
-      window.clearTimeout(timeoutId);
-      setAuthError(String(e));
+      if (requestSeq === authRequestSeq) {
+        setAuthError(String(e));
+      }
     }
   },
 

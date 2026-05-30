@@ -25,9 +25,17 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": "nsis",
     "icon": [
       "icons/icon.ico"
-    ]
+    ],
+    "externalBin": [
+      "binaries/lanchat_server_next"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

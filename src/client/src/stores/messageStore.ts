@@ -45,6 +45,7 @@ import {
   saveOfflineQueue,
   type QueuedMessage,
 } from '../lib/offlineQueue';
+import { mergeIncomingMessage, normalizeTimestamp } from './messageStoreUtils';
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ function toChatMessage(
     nickname: raw.nickname ?? t('common.unknown'),
     content: raw.msg ?? '',
     contentType: raw.content_type ?? 'text',
-    timestamp: raw.timestamp ?? Date.now(),
+    timestamp: normalizeTimestamp(raw.timestamp),
     status: 'sent',
     edited: Boolean(raw.edited),
     deleted: Boolean(raw.deleted),
@@ -244,9 +245,6 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
 
     try {
       await useConnectionStore.getState().sendRawJson(json);
-      set((s) => ({
-        messagesByContact: { ...s.messagesByContact, [toId]: updateMessageStatus(s.messagesByContact[toId], localId, 'sent') },
-      }));
     } catch {
       set((s) => ({
         messagesByContact: { ...s.messagesByContact, [toId]: updateMessageStatus(s.messagesByContact[toId], localId, 'failed') },
@@ -278,9 +276,6 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
 
     try {
       await useConnectionStore.getState().sendRawJson(json);
-      set((s) => ({
-        messagesByGroup: { ...s.messagesByGroup, [groupId]: updateMessageStatus(s.messagesByGroup[groupId], localId, 'sent') },
-      }));
     } catch {
       set((s) => ({
         messagesByGroup: { ...s.messagesByGroup, [groupId]: updateMessageStatus(s.messagesByGroup[groupId], localId, 'failed') },
@@ -450,6 +445,13 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
       }
 
       case MsgType.RegisterUserReturn: {
+        // Extract assigned user ID and auto-fill it for login
+        const regResult = raw as unknown as Record<string, unknown>;
+        const assignedId = regResult['id'];
+        if (assignedId !== undefined && assignedId !== null) {
+          const idStr = String(assignedId);
+          window.localStorage.setItem('lanchat-last-user-id', idStr);
+        }
         useAuthStore.setState((s) => ({ auth: { ...s.auth, loading: false, error: null, view: 'login' } }));
         break;
       }
@@ -457,12 +459,13 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
       // ── Private messages ──
       case MsgType.ReceiveMsg: {
         const incoming = raw as ReceiveMsgMessage;
-        const fromId = incoming.fromId ?? 0;
+        const currentUserId = useAuthStore.getState().currentUser?.id ?? 0;
+        const peerId = currentUserId ? directPeerId(incoming, currentUserId) : (incoming.fromId ?? 0);
         const chatMsg = toChatMessage(incoming);
         set((s) => ({
-          messagesByContact: { ...s.messagesByContact, [fromId]: [...(s.messagesByContact[fromId] || []), chatMsg] },
+          messagesByContact: { ...s.messagesByContact, [peerId]: mergeIncomingMessage(s.messagesByContact[peerId], chatMsg) },
           contacts: s.contacts.map((c) =>
-            c.id === fromId ? { ...c, unread: s.activeContactId === fromId ? c.unread : c.unread + 1, lastMessage: incoming.msg ?? c.lastMessage } : c,
+            c.id === peerId ? { ...c, unread: s.activeContactId === peerId ? c.unread : c.unread + 1, lastMessage: incoming.msg ?? c.lastMessage } : c,
           ),
         }));
         break;
@@ -472,7 +475,7 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
         const incoming = raw as ReceiveGroupMsgMessage;
         const groupId = incoming.groupId ?? 0;
         set((s) => ({
-          messagesByGroup: { ...s.messagesByGroup, [groupId]: [...(s.messagesByGroup[groupId] || []), toChatMessage(incoming)] },
+          messagesByGroup: { ...s.messagesByGroup, [groupId]: mergeIncomingMessage(s.messagesByGroup[groupId], toChatMessage(incoming)) },
         }));
         break;
       }
@@ -582,7 +585,7 @@ export const useMessageStore = create<MessageStore>()((set, get) => ({
           id: file.msg_id ? String(file.msg_id) : msgId(), fromId, nickname: t('common.unknownUser', { id: fromId }),
           content: file.msg ? `${file.msg}: ${label}` : label,
           contentType: file.file_name.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? 'image' : 'file',
-          timestamp: file.timestamp ?? Date.now(), status: 'sent',
+          timestamp: normalizeTimestamp(file.timestamp), status: 'sent',
         };
         if (file.groupId) {
           set((s) => ({ messagesByGroup: { ...s.messagesByGroup, [file.groupId as number]: [...(s.messagesByGroup[file.groupId as number] || []), chatMsg] } }));
