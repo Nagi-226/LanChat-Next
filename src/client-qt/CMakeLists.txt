@@ -11,10 +11,19 @@ enable_testing()
 # 仓库根 protocol/ 提供框架无关的 message_types.h（客户端直接 include）
 set(LANCHAT_PROTOCOL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../protocol")
 
-add_executable(lanchat_qt_tests
+add_executable(lanchat_qt_test_frame_buffer
     tests/test_frame_buffer.cpp
     src/net/frame_buffer.cpp
 )
-target_include_directories(lanchat_qt_tests PRIVATE src ${LANCHAT_PROTOCOL_DIR})
-target_link_libraries(lanchat_qt_tests PRIVATE Qt6::Core)
-add_test(NAME frame_buffer COMMAND lanchat_qt_tests)
+target_include_directories(lanchat_qt_test_frame_buffer PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_frame_buffer PRIVATE Qt6::Core)
+add_test(NAME frame_buffer COMMAND lanchat_qt_test_frame_buffer)
+
+add_executable(lanchat_qt_test_messages
+    tests/test_messages.cpp
+    src/net/frame_buffer.cpp
+    src/protocol/messages.cpp
+)
+target_include_directories(lanchat_qt_test_messages PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_messages PRIVATE Qt6::Core)
+add_test(NAME messages COMMAND lanchat_qt_test_messages)
