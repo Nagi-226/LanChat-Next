@@ -6,6 +6,7 @@
 #include <QtEndian>
 #include <cassert>
 #include <iostream>
+#include "test_assert.h" // Release 下也真正求值的断言（防 NDEBUG 假绿）
 
 // 手工组一帧：4 字节大端长度 + payload（不复用被测代码的 encode）
 static QByteArray frame(const QByteArray& p)

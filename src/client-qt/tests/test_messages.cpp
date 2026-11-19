@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <cassert>
 #include <iostream>
+#include "test_assert.h" // Release 下也真正求值的断言（防 NDEBUG 假绿）
 
 int main()
 {
@@ -27,7 +28,7 @@ int main()
 
     // loginNumeric：id 保持 number
     const QJsonObject ln = protocol::loginNumeric(1000, "965163");
-    assert(ln.value("id").isDouble() || ln.value("id").isInt());
+    assert(ln.value("id").isDouble());
     assert(ln.value("id").toInt() == 1000);
 
     // 其余构造器 type 字段正确
