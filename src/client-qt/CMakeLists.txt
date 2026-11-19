@@ -45,3 +45,11 @@ add_executable(lanchat_qt_test_store
 target_include_directories(lanchat_qt_test_store PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt_test_store PRIVATE Qt6::Core)
 add_test(NAME store COMMAND lanchat_qt_test_store)
+
+add_executable(lanchat_qt_test_devmode
+    tests/test_devmode.cpp
+    src/app/devmode.cpp
+)
+target_include_directories(lanchat_qt_test_devmode PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_devmode PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME devmode COMMAND lanchat_qt_test_devmode)
