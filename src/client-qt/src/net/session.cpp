@@ -77,6 +77,16 @@ void Session::sendAnnounce(const QString& msg)
     send(protocol::announce(selfId_, msg));
 }
 
+void Session::createGroup(const QString& name)
+{
+    send(QJsonObject{{"type", 9}, {"hostId", selfId_}, {"name", name}});
+}
+
+void Session::joinGroup(int groupId)
+{
+    send(QJsonObject{{"type", 13}, {"id", selfId_}, {"groupId", groupId}});
+}
+
 void Session::logout()
 {
     heartbeatTimer_.stop();
@@ -178,8 +188,15 @@ void Session::dispatch(const QJsonObject& obj)
         heartbeatTimer_.start();
         emit stateChanged("已登录");
         emit ready(selfId_, selfNick_);
+        emit usersReceived(obj);
         break;
     }
+    case 10: // CreateGroupReturn
+    case 14: // JoinGroupReturn
+    case 18: // UserJoinGroup
+    case 19: // UserLeaveGroup
+        emit groupEvent(obj);
+        break;
     case 4: // LoginFailedReturn
         emit authError(obj.value("msg").toString());
         emit stateChanged("登录失败");

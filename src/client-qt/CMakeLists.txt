@@ -53,3 +53,23 @@ add_executable(lanchat_qt_test_devmode
 target_include_directories(lanchat_qt_test_devmode PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt_test_devmode PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME devmode COMMAND lanchat_qt_test_devmode)
+
+# 主客户端目标（WIN32 = 无控制台窗口）
+add_executable(lanchat_qt WIN32
+    src/main.cpp
+    src/net/frame_buffer.cpp
+    src/net/session.cpp
+    src/protocol/messages.cpp
+    src/model/store.cpp
+    src/app/devmode.cpp
+    src/app/server_process.cpp
+    src/ui/theme.cpp
+    src/ui/login_view.cpp
+    src/ui/register_view.cpp
+    src/ui/chat_view.cpp
+    src/ui/contacts_panel.cpp
+    src/ui/search_panel.cpp
+    src/ui/main_window.cpp
+)
+target_include_directories(lanchat_qt PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)

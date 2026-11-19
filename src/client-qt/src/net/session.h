@@ -24,6 +24,8 @@ public:
     void sendGroup(int groupId, const QString& msg);
     void requestHistory(int toId, int limit, const QString& cursor);
     void sendAnnounce(const QString& msg);
+    void createGroup(const QString& name);
+    void joinGroup(int groupId);
     void logout();
 
     int selfId() const { return selfId_; }
@@ -31,6 +33,8 @@ public:
 
 signals:
     void ready(int uid, const QString& nick);
+    void usersReceived(const QJsonObject& loginSuccess);
+    void groupEvent(const QJsonObject& evt);
     void authError(const QString& msg);
     void messageReceived(const QJsonObject& msg);
     void presenceChanged(int id, bool online);
