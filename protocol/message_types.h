@@ -27,7 +27,7 @@ enum class MsgType : int {
     // --- Auth (0-4) ---
     RegisterUser       = 0,   // Client  Server: register new user
     RegisterUserReturn = 1,   // Server  Client: registration result with assigned ID
-    Login              = 2,   // Client  Server: login request
+    Login              = 2,   // Client  Server: login request (id = numeric user id OR nickname string)
     LoginSuccessReturn = 3,   // Server  Client: login success + friend list
     LoginFailedReturn  = 4,   // Server  Client: login failed
 
