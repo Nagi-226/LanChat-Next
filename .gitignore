@@ -29,3 +29,4 @@ src/client/node_modules/
 src/client/dist/
 src/client/src-tauri/target/
 src/client/src-tauri/gen/
+build-qt/

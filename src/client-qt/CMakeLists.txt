@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.16)
+project(lanchat_qt LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Network)
+enable_testing()
+
+# 仓库根 protocol/ 提供框架无关的 message_types.h（客户端直接 include）
+set(LANCHAT_PROTOCOL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../protocol")
+
+add_executable(lanchat_qt_tests
+    tests/test_frame_buffer.cpp
+    src/net/frame_buffer.cpp
+)
+target_include_directories(lanchat_qt_tests PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_tests PRIVATE Qt6::Core)
+add_test(NAME frame_buffer COMMAND lanchat_qt_tests)
