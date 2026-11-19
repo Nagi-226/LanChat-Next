@@ -29,7 +29,30 @@
 A complete rewrite of a graduation project LAN chat application, rebuilt from the ground up with modern technology and AI-assisted development. Designed for **small-to-medium enterprises (≤ 500 users)** — deploy on a single LAN server, no cloud dependency.
 
 > **Vision**: Discord-level UI polish, Telegram-level simplicity, enterprise LAN reliability.
-> **Endgame (v2.0.0)**: Zero Qt dependencies. Pure C++17 server + Tauri/React desktop client.
+> **Endgame (v2.0.0)**: Pure C++17 server + **Qt6 原生桌面客户端**（单 exe，无 node/webview 依赖）。
+
+---
+
+## Desktop clients（2026-11-19 起）
+
+**主客户端 = Qt6 Widgets 原生版**（`src/client-qt/`），取代 Tauri 套壳：
+单原生 exe、无 node/npm/webview/devUrl 嵌入等脆弱面；暗色 token 化 QSS；
+登录标识为**用户名**（如 `Nagi_226`，服务端 `Login.id` 接受 integer 或 string）；
+**Console/开发者入口默认隐藏**，仅开发者模式（Ctrl+Shift+D 或 ini `developer_mode=true`）可见。
+
+构建/运行（Windows, Qt 6.10.3 mingw_64）：
+```bash
+export PATH="/d/Qt/Tools/mingw1310_64/bin:/d/Qt/6.10.3/mingw_64/bin:$PATH"
+cmake -S src/client-qt -B build-qt -G Ninja -DCMAKE_PREFIX_PATH=D:/Qt/6.10.3/mingw_64
+cmake --build build-qt --target lanchat_qt
+ctest --test-dir build-qt          # frame_buffer/messages/session/store/devmode
+windeployqt --release build-qt/lanchat_qt.exe
+# sidecar：把 lanchat_server_next.exe 放到 lanchat_qt.exe 旁（客户端会自动 spawn/复用）
+./build-qt/lanchat_qt.exe
+```
+
+**Tauri/React 客户端已退役**，整体移至 `legacy/tauri-client/`（保留历史，不再构建）。
+旧 `scripts/verify_v1_*.ps1` 仍指向旧 `src/client` 路径，属历史脚本，仅作存档。
 
 ---
 

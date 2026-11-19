@@ -164,11 +164,13 @@ if args.phase == 1:
           f"echo_fromId={r.get('fromId')} bob_id={bob_id} alice_id={alice_id} type={r.get('type')}")
     c3.close()
 
-    # C11 把昵称填进 id 字段：协议要求数字 id，应失败（记录行为供客户端 UX 参考）
+    # C11 用户名登录已是功能：存在的用户名+正确密码应成功；不存在的用户名应 401
     c.send({"type": 2, "id": "audit_alice", "password": ALICE_PW})
-    r = c.recv()
-    check("C11 nickname-in-id rejected (informational)", r.get("type") == 4,
-          f"resp={r}")
+    r = c.recv_expect({3, 4})
+    check("C11a username login succeeds", r.get("type") == 3, f"resp_type={r.get('type')}")
+    c.send({"type": 2, "id": "no_such_nick_xyz", "password": ALICE_PW})
+    r = c.recv_expect({3, 4})
+    check("C11b unknown username 401", r.get("code") == 401, f"resp={r}")
 
     # C14/C15 schema 上限是否被服务端强制：password 256 / nickname 64 是 schema 上限
     c.send({"type": 0, "nickname": "audit_maxpw", "password": "P" * 256})
@@ -191,10 +193,10 @@ else:
     if args.phase == 3:
         # 复测 phase 1 被广播帧污染的用例：全部用新连接 + recv_expect
         c = Client()
-        # C11 昵称填进 id 字段：协议要求数字 id，应回 type=4
-        c.send({"type": 2, "id": "audit_alice", "password": ALICE_PW})
-        r = c.recv_expect({4})
-        check("C11 nickname-in-id rejected", r.get("type") == 4, f"resp={r}")
+        # C11 用户名登录已是功能：不存在的用户名应 401（存在的用户名+正确密码在 phase1 C11a 验）
+        c.send({"type": 2, "id": "no_such_nick_xyz", "password": ALICE_PW})
+        r = c.recv_expect({3, 4})
+        check("C11 unknown username 401", r.get("code") == 401, f"resp={r}")
         c.close()
 
         c = Client()
