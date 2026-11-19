@@ -7,29 +7,34 @@
 
 LoginView::LoginView(QWidget* parent) : QWidget(parent)
 {
-    auto* lay = new QVBoxLayout(this);
+    // 外层垂直居中；内层固定宽卡片水平居中 → 正常宽窄的居中矩形，不铺满全宽
+    auto* outer = new QVBoxLayout(this);
+    outer->addStretch(1);
+    auto* card = new QWidget(this);
+    card->setFixedWidth(380);
+    auto* lay = new QVBoxLayout(card);
     lay->setSpacing(10);
-    auto* title = new QLabel("LanChat-Next", this);
+    auto* title = new QLabel("LanChat-Next", card);
     title->setObjectName("title");
-    user_ = new QLineEdit(this);
+    user_ = new QLineEdit(card);
     user_->setPlaceholderText("用户名");
-    pass_ = new QLineEdit(this);
+    pass_ = new QLineEdit(card);
     pass_->setPlaceholderText("密码");
     pass_->setEchoMode(QLineEdit::Password);
-    auto* go = new QPushButton("登录", this);
+    auto* go = new QPushButton("登录", card);
     go->setObjectName("primary");
-    err_ = new QLabel(this);
+    err_ = new QLabel(card);
     err_->setObjectName("err");
-    auto* reg = new QPushButton("注册新账户", this);
+    auto* reg = new QPushButton("注册新账户", card);
     reg->setFlat(true);
-    lay->addStretch(1);
     lay->addWidget(title, 0, Qt::AlignHCenter);
     lay->addWidget(user_);
     lay->addWidget(pass_);
     lay->addWidget(go);
     lay->addWidget(err_, 0, Qt::AlignHCenter);
     lay->addWidget(reg, 0, Qt::AlignHCenter);
-    lay->addStretch(2);
+    outer->addWidget(card, 0, Qt::AlignHCenter);
+    outer->addStretch(1);
 
     connect(go, &QPushButton::clicked, this, [this] {
         emit loginRequested(user_->text().trimmed(), pass_->text());
