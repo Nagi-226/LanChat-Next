@@ -37,3 +37,11 @@ add_executable(lanchat_qt_test_session
 target_include_directories(lanchat_qt_test_session PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt_test_session PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME session COMMAND lanchat_qt_test_session)
+
+add_executable(lanchat_qt_test_store
+    tests/test_store.cpp
+    src/model/store.cpp
+)
+target_include_directories(lanchat_qt_test_store PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_store PRIVATE Qt6::Core)
+add_test(NAME store COMMAND lanchat_qt_test_store)
