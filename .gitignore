@@ -29,4 +29,19 @@ src/client/node_modules/
 src/client/dist/
 src/client/src-tauri/target/
 src/client/src-tauri/gen/
-build-qt/
+
+# Qt 客户端构建目录与日志
+#   build-qt/        正常构建目录
+#   build-qt-dbg/    debug 构建
+#   build-qt-*.log   反复调构建时留下的日志（曾累积 10 个）
+build-qt*/
+build-qt*.log
+
+# 构建/检查日志（仓库当前无任何 .log 被追踪，故可全局忽略）
+*.log
+
+# 图谱/流程图工具产物
+graphify-out/
+
+# 工具目录
+.claude-flow/
