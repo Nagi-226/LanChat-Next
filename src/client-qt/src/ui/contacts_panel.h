@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QHash>
 #include <QList>
 #include <QPair>
 
@@ -35,9 +36,9 @@ class ContactsPanel : public QWidget {
 public:
     explicit ContactsPanel(QWidget* parent = nullptr);
     void setContacts(const QList<ContactItem>& items);
-    void setGroups(const QList<QPair<int, QString>>& items);
+    void setGroups(const QList<QPair<int, QString>>& items,const QHash<QString,int>& unread={});
     void setAlerts(const QList<AlertItem>& items);
-    void setSelected(int id);
+    void setSelected(int id,bool group=false);
     void setHovered(int id); // 预览 hook：强制 hover 态供状态对照截图
 
 protected:
@@ -59,5 +60,6 @@ private:
     QVBoxLayout* alertLay_;
     QLineEdit* filter_;
     int selectedId_ = -1;
+    bool selectedGroup_=false;
     QList<QPair<int, QWidget*>> rows_;
 };

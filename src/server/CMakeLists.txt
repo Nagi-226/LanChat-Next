@@ -18,6 +18,7 @@ add_executable(lanchat_server_next
   src/SessionPool.cpp
   src/PresenceManager.cpp
   src/MessageRouter.cpp
+  src/AttachmentStore.cpp
   src/FrameCodec.cpp
   src/ServerLogger.cpp
   src/AsyncSession.cpp
@@ -44,7 +45,9 @@ target_include_directories(lanchat_server_next PRIVATE include ../../protocol ve
 lanchat_harden_target(lanchat_server_next)
 
 if(WIN32)
-  target_link_libraries(lanchat_server_next PRIVATE ws2_32)
+  # mswsock 提供 AcceptEx / GetAcceptExSockaddrs（asio 的 Windows accept 路径用到）。
+  # 只链 ws2_32 会在 MinGW 下报 undefined reference（审计实测）。
+  target_link_libraries(lanchat_server_next PRIVATE ws2_32 mswsock)
 endif()
 
 message(STATUS "LanChat-Next server: using standalone Asio transport with vendored mini-json/mini-spdlog")
@@ -71,12 +74,27 @@ if(LANCHAT_BUILD_TESTS)
   lanchat_enable_test_asserts(lanchat_protocol_json_tests)
   add_test(NAME protocol_json COMMAND lanchat_protocol_json_tests)
 
+  # 真 SHA-256 已知答案测试（密码预哈希 v2 用；vendor/sha256.hpp 是玩具哈希不算）
+  add_executable(lanchat_sha256_hex_tests
+    ../../tests/cpp/sha256_hex_tests.cpp
+  )
+  target_compile_features(lanchat_sha256_hex_tests PRIVATE cxx_std_17)
+  target_include_directories(lanchat_sha256_hex_tests PRIVATE vendor)
+  lanchat_harden_target(lanchat_sha256_hex_tests)
+  lanchat_enable_test_asserts(lanchat_sha256_hex_tests)
+  add_test(NAME sha256_hex COMMAND lanchat_sha256_hex_tests)
+
   add_executable(lanchat_asio_transport_tests
     ../../tests/cpp/asio_transport_tests.cpp
   )
   target_compile_features(lanchat_asio_transport_tests PRIVATE cxx_std_17)
   target_compile_definitions(lanchat_asio_transport_tests PRIVATE ASIO_STANDALONE NOMINMAX)
   target_include_directories(lanchat_asio_transport_tests PRIVATE include ../../protocol vendor/asio/include vendor)
+  if(WIN32)
+    # asio 的 io_context 在 Windows 走 winsock：WSAStartup/WSACleanup 在 ws2_32。
+    # 与主服务端同族的链接库缺失（审计实测 MinGW 下 undefined reference）。
+    target_link_libraries(lanchat_asio_transport_tests PRIVATE ws2_32)
+  endif()
   lanchat_harden_target(lanchat_asio_transport_tests)
   lanchat_enable_test_asserts(lanchat_asio_transport_tests)
   add_test(NAME asio_transport COMMAND lanchat_asio_transport_tests)

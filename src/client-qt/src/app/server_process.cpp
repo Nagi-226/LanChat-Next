@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QProcessEnvironment>
 #include <QTcpSocket>
 
 namespace {
@@ -19,11 +20,11 @@ ServerProcess::ServerProcess(QObject* parent) : QObject(parent) {}
 
 ServerProcess::~ServerProcess() { stop(); }
 
-void ServerProcess::ensureRunning()
+void ServerProcess::ensureRunning(quint16 port,int maxAttachmentMb)
 {
     // 探测：已有服务端在跑则复用
     QTcpSocket probe;
-    probe.connectToHost("127.0.0.1", 12346);
+    probe.connectToHost("127.0.0.1", port);
     if (probe.waitForConnected(300)) {
         probe.disconnectFromHost();
         return;
@@ -31,7 +32,8 @@ void ServerProcess::ensureRunning()
     const QString exe = QCoreApplication::applicationDirPath() + "/lanchat_server_next.exe";
     if (!QFile::exists(exe)) return; // 无 sidecar 则不 spawn（用户可自行起服务端）
     QDir().mkpath(unifiedDataDir());
-    proc_.start(exe, {"--port", "12346", "--data", unifiedDataDir()});
+    auto env=QProcessEnvironment::systemEnvironment();env.insert("LANCHAT_ATTACHMENT_MAX_MB",QString::number(maxAttachmentMb));proc_.setProcessEnvironment(env);
+    proc_.start(exe, {"--port", QString::number(port), "--data", unifiedDataDir()});
     spawned_ = proc_.waitForStarted(3000);
 }
 

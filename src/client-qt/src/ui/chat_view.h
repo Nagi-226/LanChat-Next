@@ -4,7 +4,12 @@
 #pragma once
 
 #include <QWidget>
+#include <QJsonObject>
+#include "net/transfer_manager.h"
 
+class QDragEnterEvent;
+class QDropEvent;
+class QPushButton;
 class QLineEdit;
 class QLabel;
 class QVBoxLayout;
@@ -21,11 +26,29 @@ public:
     void appendMessage(int fromId, const QString& senderName, const QString& text,
                        qint64 ts, bool grouped, int alertLevel = 0);
     void clear();
+    void setGroup(bool group);
+    void setHistoryAvailable(bool available);
+    void appendAttachment(int fromId,const QString& sender,const QJsonObject& attachment,qint64 ts,const QString& path={});
+    void attachmentReady(const QString& id,const QString& path);
+    void setTransfers(const QList<TransferTask>& tasks);
 
 signals:
     void sendRequested(const QString& text);
+    void leaveRequested();
+    void historyRequested();
+    void filesRequested(const QStringList& files);
+    void attachmentRequested(const QJsonObject& attachment);
+    void transferAction(const QString& id,const QString& action);
 
+protected:
+    bool eventFilter(QObject* object,QEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 private:
+    void populateAttachment(QWidget* card,const QJsonObject& attachment,const QString& path);
+    QWidget* transfersBody_;
+    QPushButton* leave_;
+    QPushButton* history_;
     void updateEmptyState();
     int selfId_ = 0;
     QLabel* peer_;

@@ -79,7 +79,7 @@ int main(int argc, char** argv)
     assert(selected.first().at(0).toInt() == 9 && selected.first().at(1).toBool());
     bool groupOpened = false;
     for (auto* label : window.findChild<ChatView*>()->findChildren<QLabel*>())
-        if (label->text() == "群 9") groupOpened = true;
+        if (label->text() == "Alerts · 群 ID 9") groupOpened = true;
     assert(groupOpened);
     emit session.messageReceived({{"fromId", 77}, {"toId", 99}, {"msg", body}, {"type", 6}});
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);

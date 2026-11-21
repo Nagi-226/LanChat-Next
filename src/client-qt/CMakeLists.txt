@@ -143,6 +143,7 @@ add_executable(lanchat_qt WIN32
     src/app/devmode.cpp
     src/app/credentials.cpp
     src/app/server_process.cpp
+    src/net/transfer_manager.cpp
     src/app/board_connection.cpp
     src/ui/theme.cpp
     src/ui/avatar.cpp
@@ -204,3 +205,16 @@ endif()
 add_test(NAME message_echo COMMAND lanchat_qt_test_message_echo)
 set_tests_properties(message_echo PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
+
+add_executable(lanchat_qt_test_lan tests/test_lan_client.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_lan PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_lan PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_lan PRIVATE crypt32)
+endif()
+set(LANCHAT_TEST_SERVER "" CACHE FILEPATH "Real server executable for LAN integration")
+if(LANCHAT_TEST_SERVER)
+    add_test(NAME lan_client COMMAND lanchat_qt_test_lan --server "${LANCHAT_TEST_SERVER}")
+    set_tests_properties(lan_client PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}" TIMEOUT 90)
+endif()

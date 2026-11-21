@@ -41,6 +41,9 @@
     "cursor": {
       "type": "string",
       "maxLength": 256
+    },
+    "before": {
+      "type": "string"
     }
   },
   "$defs": {

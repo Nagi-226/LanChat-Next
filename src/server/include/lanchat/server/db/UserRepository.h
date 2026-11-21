@@ -19,6 +19,9 @@ public:
     std::optional<UserInfo> findByNickname(const std::string& nickname);
     int create(const std::string& password, const std::string& nickname, int avatarId);
     bool verifyPassword(int userId, const std::string& password);
+    // 管理员种子/提升（仅 --init-admin 启动路径调用）与权限查询
+    int ensureAdmin(const std::string& nickname, const std::string& password);
+    bool isAdmin(int userId);
     bool updateProfile(int userId, const std::string& nickname, int avatarId);
     void setOnlineStatus(int userId, bool online);
     std::vector<UserInfo> getAllUsers();

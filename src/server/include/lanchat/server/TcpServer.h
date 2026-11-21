@@ -54,6 +54,7 @@ private:
     PresenceManager presence_;
     MessageRouter router_;
     db::UserRepository& users_;
+    db::FriendRepository& friends_;
 };
 
 } // namespace lanchat::server

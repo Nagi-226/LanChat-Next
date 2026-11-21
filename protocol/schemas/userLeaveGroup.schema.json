@@ -34,6 +34,15 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 64
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error",
+        "failed",
+        "start",
+        "done"
+      ]
     }
   },
   "$defs": {

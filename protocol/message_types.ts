@@ -53,9 +53,13 @@ export enum MsgType {
   MessageReactionReturn = 48,
   ReadReceipt = 49,
   ProtocolHello = 50,
+  GroupMembers = 60,
+  GroupMembersReturn = 61,
+  AttachmentRequest = 70,
+  AttachmentResponse = 71,
 }
 
-export type ContentType = 'text' | 'image' | 'file' | 'system';
+export type ContentType = 'text' | 'image' | 'file' | 'sticker' | 'system';
 export type AIRequestType = 'summarize' | 'translate' | 'search' | 'chat';
 export type ProtocolStatus = 'ok' | 'error' | 'failed' | 'start' | 'done';
 
@@ -96,7 +100,7 @@ export interface RegisterUserReturnMessage extends ProtocolMessageBase {
 
 export interface LoginMessage extends ProtocolMessageBase {
   type: MsgType.Login;
-  id: number;
+  id: number | string;
   password: string;
 }
 
@@ -122,7 +126,7 @@ export interface SendMsgMessage extends ProtocolMessageBase {
   fromId: number;
   toId: number;
   msg: string;
-  content_type?: ContentType;
+  content_type?: 'text' | 'image' | 'file' | 'sticker' | 'system';
   reply_to?: string;
 }
 
@@ -134,8 +138,9 @@ export interface ReceiveMsgMessage extends ProtocolMessageBase {
   id?: number;
   nickname?: string;
   headId?: number;
-  content_type?: ContentType;
+  content_type?: 'text' | 'image' | 'file' | 'sticker' | 'system';
   reply_to?: string;
+  attachment?: Record<string, unknown>;
 }
 
 export interface UserOnlineMessage extends ProtocolMessageBase {
@@ -194,6 +199,7 @@ export interface JoinGroupReturnMessage extends ProtocolMessageBase {
   users?: UserInfo[];
   msg?: string;
   code?: number;
+  name?: string;
 }
 
 export interface LeaveGroupMessage extends ProtocolMessageBase {
@@ -207,7 +213,7 @@ export interface SendGroupMsgMessage extends ProtocolMessageBase {
   fromId: number;
   groupId: number;
   msg: string;
-  content_type?: ContentType;
+  content_type?: 'text' | 'image' | 'file' | 'sticker' | 'system';
   reply_to?: string;
 }
 
@@ -218,8 +224,9 @@ export interface ReceiveGroupMsgMessage extends ProtocolMessageBase {
   msg: string;
   nickname?: string;
   headId?: number;
-  content_type?: ContentType;
+  content_type?: 'text' | 'image' | 'file' | 'sticker' | 'system';
   reply_to?: string;
+  attachment?: Record<string, unknown>;
 }
 
 export interface UserJoinGroupMessage extends ProtocolMessageBase {
@@ -235,6 +242,7 @@ export interface UserLeaveGroupMessage extends ProtocolMessageBase {
   id: number;
   groupId: number;
   nickname?: string;
+  status?: ProtocolStatus;
 }
 
 export interface HeartbeatMessage extends ProtocolMessageBase {
@@ -263,6 +271,7 @@ export interface RequestHistoryMessage extends ProtocolMessageBase {
   groupId?: number;
   limit?: number;
   cursor?: string;
+  before?: string;
 }
 
 export interface HistoryResponseMessage extends ProtocolMessageBase {
@@ -270,6 +279,11 @@ export interface HistoryResponseMessage extends ProtocolMessageBase {
   messages: Record<string, unknown>[];
   cursor?: string;
   has_more?: boolean;
+  groupId?: number;
+  toId?: number;
+  status?: ProtocolStatus;
+  code?: number;
+  msg?: string;
 }
 
 export interface SendFileMessage extends ProtocolMessageBase {
@@ -335,7 +349,7 @@ export interface UserProfileUpdateMessage extends ProtocolMessageBase {
 export interface SystemBroadcastMessage extends ProtocolMessageBase {
   type: MsgType.SystemBroadcast;
   msg: string;
-  content_type?: ContentType;
+  content_type?: 'text' | 'image' | 'file' | 'sticker' | 'system';
   status?: ProtocolStatus;
   code?: number;
 }
@@ -484,6 +498,53 @@ export interface ProtocolHelloMessage extends ProtocolMessageBase {
   msg?: string;
 }
 
+export interface GroupMembersMessage extends ProtocolMessageBase {
+  type: MsgType.GroupMembers;
+  groupId: number;
+}
+
+export interface GroupMembersReturnMessage extends ProtocolMessageBase {
+  type: MsgType.GroupMembersReturn;
+  groupId?: number;
+  users?: UserInfo[];
+  name?: string;
+  hostId?: number;
+  status?: ProtocolStatus;
+  code?: number;
+  msg?: string;
+}
+
+export interface AttachmentRequestMessage extends ProtocolMessageBase {
+  type: MsgType.AttachmentRequest;
+  op: string;
+  request_id: string;
+  attachment_id?: string;
+  upload_id?: string;
+  toId?: number;
+  groupId?: number;
+  file_name?: string;
+  file_size?: number;
+  sha256?: string;
+  content_type?: 'text' | 'image' | 'file' | 'sticker' | 'system';
+  offset?: number;
+  data?: string;
+}
+
+export interface AttachmentResponseMessage extends ProtocolMessageBase {
+  type: MsgType.AttachmentResponse;
+  status: ProtocolStatus;
+  request_id: string;
+  op?: string;
+  attachment_id?: string;
+  attachment?: Record<string, unknown>;
+  next_offset?: number;
+  max_bytes?: number;
+  offset?: number;
+  data?: string;
+  eof?: boolean;
+  msg?: string;
+}
+
 export type ProtocolMessage =
   RegisterUserMessage |
   RegisterUserReturnMessage |
@@ -535,7 +596,11 @@ export type ProtocolMessage =
   MessageReactionMessage |
   MessageReactionReturnMessage |
   ReadReceiptMessage |
-  ProtocolHelloMessage;
+  ProtocolHelloMessage |
+  GroupMembersMessage |
+  GroupMembersReturnMessage |
+  AttachmentRequestMessage |
+  AttachmentResponseMessage;
 
 export const MSG_TYPE_NAMES: Record<MsgType, string> = {
   [MsgType.RegisterUser]: 'registerUser',
@@ -589,9 +654,13 @@ export const MSG_TYPE_NAMES: Record<MsgType, string> = {
   [MsgType.MessageReactionReturn]: 'messageReactionReturn',
   [MsgType.ReadReceipt]: 'readReceipt',
   [MsgType.ProtocolHello]: 'protocolHello',
+  [MsgType.GroupMembers]: 'groupMembers',
+  [MsgType.GroupMembersReturn]: 'groupMembersReturn',
+  [MsgType.AttachmentRequest]: 'attachmentRequest',
+  [MsgType.AttachmentResponse]: 'attachmentResponse',
 };
 
 export function isValidMsgType(value: number): value is MsgType {
-  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.ProtocolHello;
+  return Number.isInteger(value) && [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 60, 61, 70, 71].includes(value);
 }
 

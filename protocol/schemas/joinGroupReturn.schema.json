@@ -49,6 +49,11 @@
       "type": "integer",
       "minimum": 100,
       "maximum": 599
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
     }
   },
   "$defs": {

@@ -25,6 +25,8 @@ public:
     bool join(int userId, int groupId);
     bool leave(int userId, int groupId);
     bool exists(int groupId);
+    bool isMember(int uid, int groupId);
+    ChannelInfo find(int groupId);
 
 private:
     ChannelInfo fromRow(const Row& row) const;

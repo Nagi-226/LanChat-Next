@@ -30,7 +30,8 @@
         "text",
         "image",
         "file",
-        "system"
+        "system",
+        "sticker"
       ]
     },
     "status": {

@@ -1,4 +1,5 @@
 #include "model/store.h"
+#include <algorithm>
 
 Store::Store(QObject* parent) : QObject(parent) {}
 
@@ -24,14 +25,19 @@ void Store::setOnline(int id, bool online)
     emit changed();
 }
 
-void Store::addMessage(const Message& m)
+bool Store::addMessage(const Message& m)
 {
     // direct 会话按"对方 id"归档：自己发的对方=toId，收到的对方=fromId
     const QString key = (m.kind == "group")
                             ? groupKey(m.groupId)
                             : directKey(m.fromId == selfId_ ? m.toId : m.fromId);
+    if(!m.id.isEmpty()) for(const auto& old:convs_[key]) if(old.id==m.id) return false;
     convs_[key].append(m);
-    emit changed();
+    std::stable_sort(convs_[key].begin(),convs_[key].end(),[](const Message& a,const Message& b){
+        bool an=false,bn=false;auto ai=a.id.toLongLong(&an),bi=b.id.toLongLong(&bn);
+        return an&&bn?ai<bi:a.ts<b.ts;
+    });
+    emit changed(); return true;
 }
 
 QList<Contact> Store::contacts() const
@@ -56,3 +62,4 @@ QList<Message> Store::search(const QString& query) const
     }
     return hits;
 }
+void Store::clear(){contacts_.clear();convs_.clear();selfId_=0;emit changed();}

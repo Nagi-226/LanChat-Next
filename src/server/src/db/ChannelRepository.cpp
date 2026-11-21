@@ -34,6 +34,7 @@ ChannelRepository::ChannelRepository(Database& db) : db_(db) {
 }
 
 ChannelInfo ChannelRepository::createGroup(int hostId, const std::string& name) {
+    return db_.withLock([&]() {
     ChannelInfo group;
     group.group_id = nextGroupId();
     group.host_id = hostId;
@@ -47,6 +48,8 @@ ChannelInfo ChannelRepository::createGroup(int hostId, const std::string& name) 
     db_.insert("groups", row);
     join(hostId, group.group_id);
     return group;
+
+    });
 }
 
 std::vector<ChannelInfo> ChannelRepository::searchGroups(
@@ -95,6 +98,7 @@ std::vector<int> ChannelRepository::members(int groupId) {
 }
 
 bool ChannelRepository::join(int userId, int groupId) {
+    return db_.withLock([&]() {
     if (!exists(groupId)) {
         return false;
     }
@@ -111,6 +115,8 @@ bool ChannelRepository::join(int userId, int groupId) {
     row["joined_at"] = vendor::json::Value(static_cast<std::int64_t>(std::time(nullptr)));
     db_.insert("group_members", row);
     return true;
+
+    });
 }
 
 bool ChannelRepository::leave(int userId, int groupId) {
@@ -130,6 +136,14 @@ bool ChannelRepository::exists(int groupId) {
         return asInt(row, "group_id") == groupId;
     });
     return !rows.empty();
+}
+
+bool ChannelRepository::isMember(int uid, int gid) {
+    auto list=members(gid); return uid>0 && std::find(list.begin(),list.end(),uid)!=list.end();
+}
+ChannelInfo ChannelRepository::find(int gid) {
+    auto rows=db_.query("groups",[gid](const Row& r){return asInt(r,"group_id")==gid;});
+    return rows.empty()?ChannelInfo{}:fromRow(rows[0]);
 }
 
 ChannelInfo ChannelRepository::fromRow(const Row& row) const {

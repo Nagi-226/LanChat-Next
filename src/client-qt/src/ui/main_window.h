@@ -12,6 +12,7 @@
 #include "ui/contacts_panel.h" // AlertItem
 #include "model/store.h"      // Message（板端告警判定入参）
 
+class TransferManager;
 class Session;
 class Store;
 class DevMode;
@@ -35,11 +36,18 @@ public:
     void loadDemoData(bool withMessages = true, bool openBoard = false);
     void showBoardConnection();
 
+signals:
+    void connectionRequested(const QString& host,quint16 port,bool hosted,int maxAttachmentMb);
+
 protected:
     void mousePressEvent(QMouseEvent* e) override;
     void mouseMoveEvent(QMouseEvent* e) override;
 
 private:
+    void showConnectionSettings();
+    void renderConversation();
+    void renderMessage(const Message& m,bool grouped,int level);
+    void refreshTransfers();
     void buildTitleBar();
     void rebuildTitleBar();
     void buildMainPage();
@@ -53,6 +61,10 @@ private:
     bool isBoardAlert(const Message& m) const;
     int alertLevelFor(const QString& text) const;
 
+    bool transferUpdatePending_=false;
+    TransferManager* transfers_;
+    QHash<int,QList<int>> groupMembers_;
+    QHash<QString,QString> historyCursors_;
     Session* sess_;
     Store* store_;
     DevMode* dev_;
@@ -72,7 +84,7 @@ private:
     int currentPeer_ = 0;
     bool currentIsGroup_ = false;
     QList<QPair<int, QString>> groups_;
-    QHash<int, int> unread_;                       // UI 本地未读
+    QHash<QString, int> unread_;                       // UI 本地未读
     QHash<QString, QPair<int, qint64>> lastMsg_;   // 会话 -> (lastFrom, lastTs) 用于分组
     QString pendingUser_;                          // 本次登录输入，登录成功后决定是否记住
     QString pendingPass_;

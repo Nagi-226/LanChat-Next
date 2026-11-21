@@ -26,6 +26,16 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QTimer>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QFormLayout>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QFile>
+#include <QImage>
+#include <QDesktopServices>
+#include <QUrl>
+#include "net/transfer_manager.h"
 
 namespace {
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
@@ -39,6 +49,7 @@ bool groupedWith(const QPair<int, qint64>& last, int from, qint64 ts)
 MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     : QMainWindow(parent), sess_(s), store_(st), dev_(dev), consoleBtn_(nullptr)
 {
+    transfers_=new TransferManager(sess_,this);
     setWindowFlags(Qt::FramelessWindowHint);
     resize(1300, 800);
     // 板端账号：Console 桥登录用的那个 LanChat 账号 id；左栏齿轮可改，存 ini
@@ -76,11 +87,13 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         sess_->registerUser(n, p);
     });
 
+    connect(sess_,&Session::registered,this,[this](int id){reg_->showError(QString("注册成功，账号 ID：%1，请返回登录").arg(id));});
     connect(sess_, &Session::authError, this, [this](const QString& m) {
         if (stack_->currentWidget() == login_) login_->showError(m);
         else reg_->showError(m);
     });
     connect(sess_, &Session::ready, this, [this](int uid, const QString&) {
+        if(selfId_>0 && selfId_!=uid) {store_->clear();unread_.clear();groups_.clear();groupMembers_.clear();chat_->clear();currentPeer_=0;}
         selfId_ = uid;
         bridge_->setDefaultRecipient(uid);
         store_->setSelfId(uid);
@@ -114,9 +127,11 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         m.toId = o.value("toId").toInt();
         m.groupId = o.value("groupId").toInt();
         m.text = o.value("msg").toString();
-        m.ts = nowMs();
+        m.id=o.value("msg_id").toVariant().toString();
+        m.contentType=o.value("content_type").toString("text");m.attachment=o.value("attachment").toObject();
+        auto timestamp=o.value("timestamp").toVariant().toLongLong();m.ts=timestamp>0?(timestamp<100000000000LL?timestamp*1000:timestamp):nowMs();
         m.kind = (m.groupId > 0) ? "group" : "direct";
-        store_->addMessage(m);
+        if(!store_->addMessage(m))return;
         const int peer = (m.kind == "group") ? m.groupId : (m.fromId == selfId_ ? m.toId : m.fromId);
         const QString key = (m.kind == "group") ? Store::groupKey(m.groupId) : Store::directKey(peer);
         const bool grouped = groupedWith(lastMsg_.value(key, {-1, 0}), m.fromId, m.ts);
@@ -133,10 +148,10 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
                                  ? (currentIsGroup_ && m.groupId == currentPeer_)
                                  : (!currentIsGroup_ && peer == currentPeer_);
         if (matches) {
-            chat_->appendMessage(m.fromId, senderName(m.fromId), m.text, m.ts, grouped, alertLevel);
+            renderMessage(m,grouped,alertLevel);
         } else if (m.fromId != selfId_) {
-            unread_[peer] = unread_.value(peer, 0) + 1;
-            refreshContacts();
+            unread_[key] = unread_.value(key, 0) + 1;
+            refreshContacts();refreshGroups();
         }
     });
     connect(sess_, &Session::presenceChanged, this, [this](int id, bool on) {
@@ -144,16 +159,31 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         refreshContacts();
         refreshMembers();
     });
-    connect(sess_, &Session::groupEvent, this, [this](const QJsonObject& o) {
-        const int t = o.value("type").toInt();
-        if (t == 10 || t == 14) {
-            const int gid = o.value("groupId").toInt();
-            const QString name = o.value("name").toString();
-            if (gid > 0 && !name.isEmpty()) groups_.append({gid, name});
-            refreshGroups();
+    connect(sess_,&Session::historyReceived,this,[this](const QJsonObject& o){
+        if(o.value("status").toString()=="error")return;
+        int gid=o.value("groupId").toInt(),to=o.value("toId").toInt();
+        QString key=gid>0?Store::groupKey(gid):Store::directKey(to);
+        for(auto v:o.value("messages").toArray()) {auto a=v.toObject();Message m;m.fromId=a["fromId"].toInt();m.toId=a["toId"].toInt();m.groupId=a["groupId"].toInt();
+            m.id=a["msg_id"].toVariant().toString();m.text=a["msg"].toString();m.kind=m.groupId>0?"group":"direct";m.contentType=a.value("content_type").toString("text");m.attachment=a["attachment"].toObject();
+            auto ts=a["timestamp"].toVariant().toLongLong();m.ts=ts<100000000000LL?ts*1000:ts;store_->addMessage(m);}
+        if(!o["cursor"].toString().isEmpty())historyCursors_[key]=o["cursor"].toString();
+        if(currentPeer_==(gid>0?gid:to)&&currentIsGroup_==(gid>0)){renderConversation();chat_->setHistoryAvailable(o["has_more"].toBool());}
+    });
+    connect(sess_,&Session::groupEvent,this,[this](const QJsonObject& o){
+        int type=o["type"].toInt(),gid=o["groupId"].toInt();
+        if(o.value("status").toString()=="error"){QMessageBox::information(this,"群组",o["msg"].toString("操作失败"));return;}
+        if(type==10||type==14){bool known=false;for(const auto& g:groups_)if(g.first==gid)known=true;
+            if(gid>0&&!known)groups_.append({gid,o["name"].toString()});refreshGroups();openConversation(gid,true);}
+        if(type==61||type==14){groupMembers_[gid].clear();for(auto v:o["users"].toArray()){auto u=v.toObject();int uid=u["id"].toInt();
+            groupMembers_[gid].append(uid);store_->upsertContact(uid,u["nickname"].toString(),u["status"].toString()=="ok");}refreshMembers();refreshContacts();}
+        if(type==18||type==19){
+            if(type==19 && o["id"].toInt()==selfId_){for(int i=groups_.size()-1;i>=0;--i)if(groups_[i].first==gid)groups_.removeAt(i);
+                groupMembers_.remove(gid);refreshGroups();if(currentIsGroup_&&currentPeer_==gid){currentPeer_=0;currentIsGroup_=false;chat_->clear();chat_->setPeerLabel("已退出群组");chat_->setGroup(false);refreshMembers();}}
+            else if(currentIsGroup_&&currentPeer_==gid)sess_->requestMembers(gid);
         }
     });
     connect(sess_, &Session::broadcastReceived, this, [this](const QJsonObject& o) {
+        if(o.value("status").toString()=="error")QMessageBox::information(this,"服务器",o.value("msg").toString());
         if (o.value("event").toString() == "announce")
             chat_->appendMessage(0, "公告", o.value("msg").toString(), nowMs(), false);
     });
@@ -180,6 +210,14 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         else sess_->sendPrivate(currentPeer_, t);
     });
 
+    connect(chat_,&ChatView::leaveRequested,this,[this]{if(currentIsGroup_&&currentPeer_>0 && QMessageBox::question(this,"退出群组","确认退出当前群组？")==QMessageBox::Yes)sess_->leaveGroup(currentPeer_);});
+    connect(chat_,&ChatView::historyRequested,this,[this]{QString key=currentIsGroup_?Store::groupKey(currentPeer_):Store::directKey(currentPeer_);sess_->requestConversationHistory(currentPeer_,currentIsGroup_,historyCursors_.value(key));});
+    connect(chat_,&ChatView::filesRequested,this,[this](const QStringList& files){if(currentPeer_<=0)return;for(const auto& f:files)transfers_->upload(f,currentIsGroup_?0:currentPeer_,currentIsGroup_?currentPeer_:0);});
+    connect(chat_,&ChatView::attachmentRequested,transfers_,&TransferManager::download);
+    connect(chat_,&ChatView::transferAction,this,[this](const QString& id,const QString& action){if(action=="pause")transfers_->pause(id);else if(action=="resume")transfers_->resume(id);else transfers_->cancel(id);});
+    connect(transfers_,&TransferManager::changed,this,&MainWindow::refreshTransfers);
+    connect(transfers_,&TransferManager::error,this,[this](const QString& text){QMessageBox::information(this,"附件",text);});
+    connect(transfers_,&TransferManager::downloaded,this,[this](const QString& id,const QString& path){chat_->attachmentReady(id,path);});
     auto* sc = new QShortcut(QKeySequence("Ctrl+Shift+D"), this);
     connect(sc, &QShortcut::activated, this, [this] { dev_->setEnabled(!dev_->enabled()); });
     connect(dev_, &DevMode::changed, this, [this](bool) { rebuildTitleBar(); });
@@ -215,6 +253,9 @@ void MainWindow::buildTitleBar()
     title->setObjectName("headerTitle");
     lay->addWidget(title);
     lay->addStretch(1);
+    auto* network=new QPushButton("服务器",titleBar_);network->setObjectName("serverSettingsButton");
+    connect(network,&QPushButton::clicked,this,&MainWindow::showConnectionSettings);lay->addWidget(network);
+    connect(sess_,&Session::stateChanged,network,[this,network](const QString& state){network->setToolTip(sess_->endpoint()+" · "+state);});
     auto* board = new QPushButton("板端连接", titleBar_);
     board->setObjectName("boardConnectionButton");
     connect(board, &QPushButton::clicked, this, &MainWindow::showBoardConnection);
@@ -272,7 +313,7 @@ void MainWindow::refreshContacts()
         it.id = c.id;
         it.name = c.nickname;
         it.online = c.online;
-        it.unread = unread_.value(c.id, 0);
+        it.unread = unread_.value(Store::directKey(c.id), 0);
         const auto conv = store_->conversation(Store::directKey(c.id));
         if (!conv.isEmpty()) {
             it.preview = conv.last().text;
@@ -281,10 +322,10 @@ void MainWindow::refreshContacts()
         items.append(it);
     }
     contacts_->setContacts(items);
-    contacts_->setSelected(currentPeer_);
+    contacts_->setSelected(currentPeer_,currentIsGroup_);
 }
 
-void MainWindow::refreshGroups() { contacts_->setGroups(groups_); }
+void MainWindow::refreshGroups() { contacts_->setGroups(groups_,unread_);contacts_->setSelected(currentPeer_,currentIsGroup_); }
 
 void MainWindow::refreshAlerts()
 {
@@ -296,7 +337,7 @@ void MainWindow::refreshAlerts()
 
 bool MainWindow::isBoardAlert(const Message& m) const
 {
-    return boardId_ > 0 && (m.kind == "direct" || m.kind == "group") && m.fromId == boardId_;
+    return boardId_ > 0 && (m.kind == "direct" || m.kind == "group") && m.fromId == boardId_ && m.contentType=="text";
 }
 
 void MainWindow::showBoardConnection()
@@ -329,6 +370,8 @@ void MainWindow::refreshMembers()
 {
     QList<ContactItem> items;
     for (const auto& c : store_->contacts()) {
+        if(currentIsGroup_ && !groupMembers_.value(currentPeer_).contains(c.id))continue;
+        if(!currentIsGroup_ && c.id!=currentPeer_ && c.id!=selfId_)continue;
         ContactItem it;
         it.id = c.id;
         it.name = c.nickname;
@@ -342,8 +385,8 @@ void MainWindow::openConversation(int id, bool isGroup)
 {
     currentPeer_ = id;
     currentIsGroup_ = isGroup;
-    unread_.remove(id);
-    contacts_->setSelected(id);
+    unread_.remove(isGroup?Store::groupKey(id):Store::directKey(id));
+    contacts_->setSelected(id,isGroup);
     refreshContacts();
     chat_->clear();
     const QString key = isGroup ? Store::groupKey(id) : Store::directKey(id);
@@ -352,10 +395,12 @@ void MainWindow::openConversation(int id, bool isGroup)
         const bool grouped = groupedWith(last, m.fromId, m.ts);
         last = {m.fromId, m.ts};
         const int lvl = isBoardAlert(m) ? alertLevelFor(m.text) : 0;
-        chat_->appendMessage(m.fromId, senderName(m.fromId), m.text, m.ts, grouped, lvl);
+        renderMessage(m,grouped,lvl);
     }
     lastMsg_[key] = last;
-    chat_->setPeerLabel(isGroup ? QStringLiteral("群 %1").arg(id) : senderName(id));
+    QString label=senderName(id);if(isGroup){for(const auto& g:groups_)if(g.first==id)label=g.second;label+=QString(" · 群 ID %1").arg(id);}
+    chat_->setPeerLabel(label);chat_->setGroup(isGroup);chat_->setHistoryAvailable(false);
+    refreshMembers();if(sess_->selfId()>0){sess_->requestConversationHistory(id,isGroup);if(isGroup)sess_->requestMembers(id);}
 }
 
 void MainWindow::mousePressEvent(QMouseEvent* e)
@@ -386,7 +431,7 @@ void MainWindow::loadDemoData(bool withMessages, bool openBoard)
     const QString k = Store::directKey(2);
     if (withMessages) {
         store_->addMessage(Message{2, 1, 0, "嗨，在吗？", now - 6 * 60000, "direct"});
-        store_->addMessage(Message{2, 1, 0, "看看这个设计稿", now - 5.5 * 60000, "direct"});
+        store_->addMessage(Message{2, 1, 0, "看看这个设计稿", now - 330000, "direct"});
         store_->addMessage(Message{1, 2, 0, "在的，发我", now - 4 * 60000, "direct"});
         store_->addMessage(Message{2, 1, 0, "好嘞", now - 60000, "direct"});
         // 板端告警演示：与 Console 桥真实正文同格式，走同一套检测/渲染路径
@@ -400,13 +445,49 @@ void MainWindow::loadDemoData(bool withMessages, bool openBoard)
         alerts_.append(AlertItem{5, "板端链路恢复：heartbeat 正常",
                                  QDateTime::fromMSecsSinceEpoch(now - 60000).toString("HH:mm"), 1});
         refreshAlerts();
-        unread_[5] = 3;
+        unread_[Store::directKey(5)] = 3;
     }
-    unread_[3] = 2;
-    unread_[4] = 1;
+    unread_[Store::directKey(3)] = 2;
+    unread_[Store::directKey(4)] = 1;
     refreshGroups();
     refreshMembers();
     openConversation(openBoard ? 5 : 2, false);
     if (!openBoard) contacts_->setHovered(3); // 状态对照：Bob 行强制 hover
     stack_->setCurrentIndex(2);
+}
+
+void MainWindow::renderMessage(const Message& m,bool grouped,int level) {
+    if(m.contentType=="text") chat_->appendMessage(m.fromId,senderName(m.fromId),m.text,m.ts,grouped,level);
+    else chat_->appendAttachment(m.fromId,senderName(m.fromId),m.attachment,m.ts,transfers_->cachedPath(m.attachment));
+}
+void MainWindow::renderConversation(){
+    chat_->clear();QString key=currentIsGroup_?Store::groupKey(currentPeer_):Store::directKey(currentPeer_);QPair<int,qint64> last{-1,0};
+    for(const auto& m:store_->conversation(key)){renderMessage(m,groupedWith(last,m.fromId,m.ts),isBoardAlert(m)?alertLevelFor(m.text):0);last={m.fromId,m.ts};}lastMsg_[key]=last;
+}
+void MainWindow::refreshTransfers(){if(transferUpdatePending_)return;transferUpdatePending_=true;QTimer::singleShot(100,this,[this]{transferUpdatePending_=false;chat_->setTransfers(transfers_->tasks());});}
+void MainWindow::showConnectionSettings(){
+    auto* page=new QWidget(stack_);auto* outer=new QVBoxLayout(page);outer->addStretch();
+    auto* formWidget=new QWidget(page);formWidget->setMaximumWidth(560);auto* form=new QFormLayout(formWidget);
+    auto* mode=new QComboBox(formWidget);mode->addItems({"本机托管（其他电脑连接本机）","连接公司局域网主机"});
+    QSettings settings;mode->setCurrentIndex(settings.value("network/hosted",true).toBool()?0:1);
+    auto* host=new QLineEdit(settings.value("network/host","127.0.0.1").toString(),formWidget);host->setObjectName("serverHost");
+    auto* port=new QSpinBox(formWidget);port->setRange(1024,65534);port->setValue(settings.value("network/port",12346).toInt());
+    auto* maximum=new QSpinBox(formWidget);maximum->setRange(1,1024);maximum->setValue(settings.value("network/attachment_max_mb",100).toInt());maximum->setSuffix(" MB");
+    auto* hint=new QLabel("公司内的所有用户连接同一台常开 PC。\n本机托管时，请允许 Windows 防火墙的专用网络入站连接。\n主机的数据与附件统一保存在 LanChat-Next/data。",formWidget);hint->setWordWrap(true);
+    form->addRow("服务器模式",mode);form->addRow("主机地址",host);form->addRow("TCP 端口",port);form->addRow("单附件上限",maximum);form->addRow(hint);
+    auto* apply=new QPushButton("保存并重新连接",formWidget);auto* back=new QPushButton("返回",formWidget);form->addRow(apply,back);
+    host->setEnabled(mode->currentIndex()==1);connect(mode,&QComboBox::currentIndexChanged,host,[host](int index){host->setEnabled(index==1);});
+    outer->addWidget(formWidget,0,Qt::AlignHCenter);outer->addStretch();auto* previous=stack_->currentWidget();stack_->addWidget(page);stack_->setCurrentWidget(page);
+    connect(back,&QPushButton::clicked,this,[this,page,previous]{stack_->setCurrentWidget(previous);stack_->removeWidget(page);page->deleteLater();});
+    connect(apply,&QPushButton::clicked,this,[=,this]{
+        bool hosted=mode->currentIndex()==0;QString address=hosted?"127.0.0.1":host->text().trimmed();if(address.isEmpty()){host->setFocus();return;}
+        QSettings cfg;cfg.setValue("network/hosted",hosted);cfg.setValue("network/host",host->text().trimmed());cfg.setValue("network/port",port->value());cfg.setValue("network/attachment_max_mb",maximum->value());
+        sess_->logout();store_->clear();selfId_=0;currentPeer_=0;groups_.clear();groupMembers_.clear();historyCursors_.clear();unread_.clear();alerts_.clear();lastMsg_.clear();chat_->clear();refreshContacts();refreshGroups();refreshMembers();refreshAlerts();
+        auto bridgeConfig=bridge_->config();bool wasRunning=bridge_->running();bridge_->stop();
+        bool changedServer=bridgeConfig.serverHost!=address||bridgeConfig.serverPort!=quint16(port->value());
+        bridgeConfig.serverHost=address;bridgeConfig.serverPort=quint16(port->value());
+        if(changedServer){bridgeConfig.accountId=0;bridgeConfig.password.clear();bridgeConfig.target=0;bridgeConfig.groupId=0;bridgeConfig.autoStart=false;boardId_=0;QSettings().setValue("board_account_id",0);}
+        bridge_->configure(bridgeConfig);if(wasRunning&&!changedServer)bridge_->start();
+        stack_->setCurrentWidget(login_);stack_->removeWidget(page);emit connectionRequested(address,quint16(port->value()),hosted,maximum->value());page->deleteLater();
+    });
 }

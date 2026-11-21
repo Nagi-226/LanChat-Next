@@ -41,6 +41,8 @@ private:
     void doWrite();
     void onMessage(const std::string& json);
     bool consumeRateLimitToken();
+    std::chrono::steady_clock::time_point bulk_window_=std::chrono::steady_clock::now();
+    size_t bulk_bytes_=0;
 
     net::io_context& ctx_;
     TcpServer& server_;

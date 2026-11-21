@@ -136,7 +136,7 @@ QWidget* ContactsPanel::makeRow(const ContactItem& it, bool isGroup)
     auto* row = new QWidget;
     row->setObjectName("contactRow");
     row->setAttribute(Qt::WA_StyledBackground, true);
-    row->setProperty("selected", it.id == selectedId_);
+    row->setProperty("selected", it.id == selectedId_ && isGroup==selectedGroup_);
     auto* h = new QHBoxLayout(row);
     h->setContentsMargins(0, 4, 8, 4);
     h->setSpacing(8);
@@ -144,16 +144,18 @@ QWidget* ContactsPanel::makeRow(const ContactItem& it, bool isGroup)
     auto* bar = new QFrame(row);
     bar->setObjectName("accentBar");
     bar->setFixedWidth(3);
-    bar->setVisible(it.id == selectedId_);
+    bar->setVisible(it.id == selectedId_ && isGroup==selectedGroup_);
     h->addWidget(bar);
     h->addWidget(new Avatar(it.name, 34, row));
     auto* mid = new QVBoxLayout;
     mid->setSpacing(2);
     auto* name = new QLabel(it.name, row);
+    name->setTextFormat(Qt::PlainText);
     name->setObjectName("contactName");
     mid->addWidget(name);
     if (!isGroup && !it.preview.isEmpty()) {
         auto* pv = new QLabel(it.preview, row);
+        pv->setTextFormat(Qt::PlainText);
         pv->setObjectName("preview");
         mid->addWidget(pv);
     }
@@ -209,7 +211,7 @@ void ContactsPanel::setContacts(const QList<ContactItem>& items)
     contactLay_->addStretch(1);
 }
 
-void ContactsPanel::setGroups(const QList<QPair<int, QString>>& items)
+void ContactsPanel::setGroups(const QList<QPair<int, QString>>& items,const QHash<QString,int>& unread)
 {
     QLayoutItem* child;
     while ((child = groupLay_->takeAt(0)) != nullptr) {
@@ -221,6 +223,7 @@ void ContactsPanel::setGroups(const QList<QPair<int, QString>>& items)
         ContactItem it;
         it.id = g.first;
         it.name = g.second;
+        it.unread=unread.value(QString("g:%1").arg(g.first));
         it.online = true;
         auto* r = makeRow(it, true);
         groupLay_->addWidget(r);
@@ -271,23 +274,27 @@ void ContactsPanel::setAlerts(const QList<AlertItem>& items)
     alertLay_->addStretch(1);
 }
 
-void ContactsPanel::setSelected(int id)
+void ContactsPanel::setSelected(int id,bool group)
 {
-    selectedId_ = id;
+    selectedId_ = id;selectedGroup_=group;
+    for(auto* row:findChildren<QWidget*>())if(row->property("rowIsGroup").toBool() && !row->property("rowIsAlert").toBool()){
+        bool on=selectedGroup_&&row->property("rowId").toInt()==id;row->setProperty("selected",on);row->style()->unpolish(row);row->style()->polish(row);
+        if(auto* bar=row->findChild<QFrame*>("accentBar"))bar->setVisible(on);
+    }
     for (auto& rw : rows_) {
-        rw.second->setProperty("selected", rw.first == id);
+        rw.second->setProperty("selected", rw.first == id && !selectedGroup_);
         rw.second->style()->unpolish(rw.second);
         rw.second->style()->polish(rw.second);
         // 竖条可见性
         if (auto* bar = rw.second->findChild<QFrame*>("accentBar"))
-            bar->setVisible(rw.first == id);
+            bar->setVisible(rw.first == id && !selectedGroup_);
     }
 }
 
 void ContactsPanel::setHovered(int id)
 {
     for (auto& rw : rows_) {
-        rw.second->setProperty("hovered", rw.first == id);
+        rw.second->setProperty("hovered", rw.first == id && !selectedGroup_);
         rw.second->style()->unpolish(rw.second);
         rw.second->style()->polish(rw.second);
     }

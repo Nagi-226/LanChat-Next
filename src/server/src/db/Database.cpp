@@ -1,4 +1,5 @@
 #include "lanchat/server/db/Database.h"
+#include <filesystem>
 #include "lanchat/server/ServerLogger.h"
 
 #include <sqlite3.h>
@@ -32,7 +33,7 @@ Database::Database(const std::string& dataDir) : data_dir_(dataDir) {}
 Database::~Database() { close(); }
 
 bool Database::open() {
-    mkdir(data_dir_.c_str());
+    std::filesystem::create_directories(std::filesystem::u8path(data_dir_));
 
     std::string dbPath = data_dir_ + "/lanchat.db";
     int rc = sqlite3_open(dbPath.c_str(), &db_);

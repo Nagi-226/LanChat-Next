@@ -11,7 +11,7 @@
       "schema": {
         "type": "integer",
         "minimum": 0,
-        "maximum": 50
+        "maximum": 71
       },
       "ts": "MsgType"
     },
@@ -124,10 +124,11 @@
           "text",
           "image",
           "file",
-          "system"
+          "system",
+          "sticker"
         ]
       },
-      "ts": "ContentType"
+      "ts": "'text' | 'image' | 'file' | 'sticker' | 'system'"
     },
     "reply_to": {
       "schema": {
@@ -344,6 +345,86 @@
         }
       },
       "ts": "string[]"
+    },
+    "attachment": {
+      "schema": {
+        "type": "object"
+      },
+      "ts": "Record<string, unknown>"
+    },
+    "attachment_id": {
+      "schema": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "ts": "string"
+    },
+    "upload_id": {
+      "schema": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "ts": "string"
+    },
+    "op": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "begin",
+          "upload",
+          "finish",
+          "download",
+          "cancel"
+        ]
+      },
+      "ts": "string"
+    },
+    "sha256": {
+      "schema": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "ts": "string"
+    },
+    "offset": {
+      "schema": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "ts": "number"
+    },
+    "next_offset": {
+      "schema": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "ts": "number"
+    },
+    "max_bytes": {
+      "schema": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "ts": "number"
+    },
+    "data": {
+      "schema": {
+        "type": "string",
+        "maxLength": 65536
+      },
+      "ts": "string"
+    },
+    "eof": {
+      "schema": {
+        "type": "boolean"
+      },
+      "ts": "boolean"
+    },
+    "before": {
+      "schema": {
+        "type": "string"
+      },
+      "ts": "string"
     }
   },
   "messages": [
@@ -437,7 +518,8 @@
         "nickname",
         "headId",
         "content_type",
-        "reply_to"
+        "reply_to",
+        "attachment"
       ]
     },
     {
@@ -534,7 +616,8 @@
       "optional": [
         "users",
         "msg",
-        "code"
+        "code",
+        "name"
       ]
     },
     {
@@ -574,7 +657,8 @@
         "nickname",
         "headId",
         "content_type",
-        "reply_to"
+        "reply_to",
+        "attachment"
       ]
     },
     {
@@ -599,7 +683,8 @@
         "groupId"
       ],
       "optional": [
-        "nickname"
+        "nickname",
+        "status"
       ]
     },
     {
@@ -647,7 +732,8 @@
         "toId",
         "groupId",
         "limit",
-        "cursor"
+        "cursor",
+        "before"
       ]
     },
     {
@@ -659,7 +745,12 @@
       ],
       "optional": [
         "cursor",
-        "has_more"
+        "has_more",
+        "groupId",
+        "toId",
+        "status",
+        "code",
+        "msg"
       ]
     },
     {
@@ -998,6 +1089,71 @@
         "min_version",
         "features",
         "status",
+        "msg"
+      ]
+    },
+    {
+      "name": "GroupMembers",
+      "schemaName": "groupMembers",
+      "value": 60,
+      "required": [
+        "groupId"
+      ],
+      "optional": []
+    },
+    {
+      "name": "GroupMembersReturn",
+      "schemaName": "groupMembersReturn",
+      "value": 61,
+      "required": [],
+      "optional": [
+        "groupId",
+        "users",
+        "name",
+        "hostId",
+        "status",
+        "code",
+        "msg"
+      ]
+    },
+    {
+      "name": "AttachmentRequest",
+      "schemaName": "attachmentRequest",
+      "value": 70,
+      "required": [
+        "op",
+        "request_id"
+      ],
+      "optional": [
+        "attachment_id",
+        "upload_id",
+        "toId",
+        "groupId",
+        "file_name",
+        "file_size",
+        "sha256",
+        "content_type",
+        "offset",
+        "data"
+      ]
+    },
+    {
+      "name": "AttachmentResponse",
+      "schemaName": "attachmentResponse",
+      "value": 71,
+      "required": [
+        "status",
+        "request_id"
+      ],
+      "optional": [
+        "op",
+        "attachment_id",
+        "attachment",
+        "next_offset",
+        "max_bytes",
+        "offset",
+        "data",
+        "eof",
         "msg"
       ]
     }

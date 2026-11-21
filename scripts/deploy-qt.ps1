@@ -69,6 +69,11 @@ Step "Qt = $QtDir"
 
 # ── 1. 构建 ───────────────────────────────────────────────────────
 if (-not $SkipBuild) {
+  Step '构建当前源码的 LanChat 服务端 ...'
+  & cmake -S $root -B (Join-Path $root 'build\server-mingw') -G Ninja -DLANCHAT_BUILD_TESTS=ON
+  if ($LASTEXITCODE -ne 0) { Fail '服务端 configure 失败' }
+  & cmake --build (Join-Path $root 'build\server-mingw') --target lanchat_server_next --parallel 4
+  if ($LASTEXITCODE -ne 0) { Fail '服务端 build 失败' }
   Step 'cmake configure ...'
   & cmake -S $clientDir -B $buildDir -G Ninja "-DCMAKE_PREFIX_PATH=$QtDir"
   if ($LASTEXITCODE -ne 0) { Fail 'cmake configure 失败' }

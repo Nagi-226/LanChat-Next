@@ -5,6 +5,9 @@
 
 #include <cstdint>
 #include <string>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 
 namespace lanchat::server::protocol_json {
 
@@ -48,6 +51,30 @@ inline std::int64_t int64Field(
         return fallback;
     }
     return it->second.as_int();
+}
+
+// msg_id is declared as string in the JSON schemas, but legacy clients send a
+// number. Accept both so schema-compliant and legacy clients keep working.
+inline std::int64_t msgIdField(
+    const Object& obj,
+    const std::string& key = "msg_id",
+    std::int64_t fallback = 0) {
+    auto it = obj.find(key);
+    if (it == obj.end()) {
+        return fallback;
+    }
+    if (it->second.is_number()) {
+        return it->second.as_int();
+    }
+    if (it->second.is_string()) {
+        const std::string text = it->second.as_string();
+        try {
+            return static_cast<std::int64_t>(std::stoll(text));
+        } catch (...) {
+            return fallback;
+        }
+    }
+    return fallback;
 }
 
 inline std::string stringField(

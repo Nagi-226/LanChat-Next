@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QObject>
+#include <QJsonObject>
 #include <QHash>
 #include <QList>
 #include <QString>
@@ -20,6 +21,9 @@ struct Message {
     QString text;
     qint64 ts = 0;
     QString kind; // "direct" / "group"
+    QString id;
+    QString contentType="text";
+    QJsonObject attachment;
 };
 
 class Store : public QObject {
@@ -31,7 +35,8 @@ public:
     void setSelfId(int id);
     void upsertContact(int id, const QString& nickname, bool online);
     void setOnline(int id, bool online);
-    void addMessage(const Message& m);
+    bool addMessage(const Message& m);
+    void clear();
 
     QList<Contact> contacts() const;
     // key = "d:<peerId>" 或 "g:<groupId>"

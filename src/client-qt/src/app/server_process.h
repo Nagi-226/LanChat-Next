@@ -11,7 +11,7 @@ class ServerProcess : public QObject {
 public:
     explicit ServerProcess(QObject* parent = nullptr);
     ~ServerProcess() override;
-    void ensureRunning();
+    void ensureRunning(quint16 port=12346,int maxAttachmentMb=100);
     void stop();
 
 private:

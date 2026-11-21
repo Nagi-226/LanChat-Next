@@ -5,6 +5,7 @@
 #include <QPixmap>
 #include <QIcon>
 #include <cstdio>
+#include <QSettings>
 
 #include "app/devmode.h"
 #include "app/server_process.h"
@@ -24,14 +25,20 @@ int main(int argc, char** argv)
     app.setStyleSheet(theme::stylesheet());
 
     ServerProcess server;
-    server.ensureRunning();
+    QSettings settings;
+    const bool hosted=settings.value("network/hosted",true).toBool();
+    const quint16 port=settings.value("network/port",12346).value<quint16>();
+    if(hosted)server.ensureRunning(port,settings.value("network/attachment_max_mb",100).toInt());
 
     DevMode dev;
     Session sess;
     Store store;
     MainWindow w(&sess, &store, &dev);
     w.show();
-    sess.connectToServer("127.0.0.1", 12346);
+    QObject::connect(&w,&MainWindow::connectionRequested,&app,[&](const QString& host,quint16 selectedPort,bool local,int maximum){
+        server.stop();if(local)server.ensureRunning(selectedPort,maximum);sess.connectToServer(host,selectedPort);
+    });
+    sess.connectToServer(hosted?QString("127.0.0.1"):settings.value("network/host","127.0.0.1").toString(),port);
 
     for (int i = 1; i < argc; ++i) {
         if (qstrcmp(argv[i], "--demo") == 0) {

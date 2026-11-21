@@ -28,6 +28,7 @@ struct StoredMessage {
 class MessageRepository {
 public:
     explicit MessageRepository(Database& db);
+    Database& database() { return db_; }
 
     StoredMessage savePrivate(
         int fromId,

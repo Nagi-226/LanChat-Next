@@ -33,6 +33,32 @@
     },
     "has_more": {
       "type": "boolean"
+    },
+    "groupId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "toId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error",
+        "failed",
+        "start",
+        "done"
+      ]
+    },
+    "code": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "msg": {
+      "type": "string",
+      "maxLength": 65536
     }
   },
   "$defs": {

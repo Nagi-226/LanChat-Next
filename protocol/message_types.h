@@ -103,7 +103,11 @@ enum class MsgType : int {
     ReadReceipt        = 49,  // Client  Server: mark message read
 
     // --- Protocol Negotiation (50) ---
-    ProtocolHello      = 50   // Bidirectional: protocol version/features
+    ProtocolHello      = 50,  // Bidirectional: protocol version/features
+    GroupMembers       = 60,  // Request selected group members; groupId=0 employee directory
+    GroupMembersReturn = 61,
+    AttachmentRequest  = 70,  // begin/upload/finish/download/cancel, authenticated 48 KiB chunks
+    AttachmentResponse = 71
 };
 
 // ============================================================
@@ -202,11 +206,11 @@ namespace ai_type {
 // ============================================================
 inline int toInt(MsgType t) { return static_cast<int>(t); }
 inline MsgType fromInt(int v) {
-    if (v >= 0 && v <= 50) return static_cast<MsgType>(v);
+    if ((v >= 0 && v <= 50) || v==60 || v==61 || v==70 || v==71) return static_cast<MsgType>(v);
     return static_cast<MsgType>(-1); // invalid
 }
 inline bool isLegacyType(MsgType t) { return static_cast<int>(t) <= 19; }
-inline bool isValidType(MsgType t) { return static_cast<int>(t) >= 0 && static_cast<int>(t) <= 50; }
+inline bool isValidType(MsgType t) { return fromInt(static_cast<int>(t))!=static_cast<MsgType>(-1); }
 
 } // namespace protocol
 } // namespace lanchat

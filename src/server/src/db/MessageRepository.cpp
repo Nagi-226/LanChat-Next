@@ -73,6 +73,7 @@ StoredMessage MessageRepository::savePrivate(
     const std::string& content,
     const std::string& contentType,
     bool delivered) {
+    return db_.withLock([&]() {
     StoredMessage message;
     message.msg_id = nextMessageId();
     message.from_id = fromId;
@@ -84,6 +85,8 @@ StoredMessage MessageRepository::savePrivate(
 
     db_.insert("messages", toRow(message));
     return message;
+
+    });
 }
 
 StoredMessage MessageRepository::saveGroup(
@@ -91,6 +94,7 @@ StoredMessage MessageRepository::saveGroup(
     int groupId,
     const std::string& content,
     const std::string& contentType) {
+    return db_.withLock([&]() {
     StoredMessage message;
     message.msg_id = nextMessageId();
     message.from_id = fromId;
@@ -102,6 +106,8 @@ StoredMessage MessageRepository::saveGroup(
 
     db_.insert("messages", toRow(message));
     return message;
+
+    });
 }
 
 std::vector<StoredMessage> MessageRepository::offlineForUser(int userId, int limit) {

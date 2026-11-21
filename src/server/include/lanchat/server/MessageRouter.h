@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PresenceManager.h"
+#include "AttachmentStore.h"
 #include "ProtocolJson.h"
 #include "SessionPool.h"
 #include "db/ChannelRepository.h"
@@ -82,6 +83,9 @@ private:
                             const protocol_json::Object& request,
                             const std::string& field) const;
 
+    void handleAttachment(const std::shared_ptr<AsyncSession>& session, const protocol_json::Object& request);
+    void handleMembers(const std::shared_ptr<AsyncSession>& session, const protocol_json::Object& request);
+    AttachmentStore attachments_;
     SessionPool& sessions_;
     PresenceManager& presence_;
     db::UserRepository& users_;

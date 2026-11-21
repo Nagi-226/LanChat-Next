@@ -20,7 +20,8 @@ TcpServer::TcpServer(std::uint16_t port,
     : port_(port),
       sessions_(maxConnections),
       router_(sessions_, presence_, users, messages, channels, friends),
-      users_(users) {}
+      users_(users),
+      friends_(friends) {}
 
 TcpServer::~TcpServer() {
     stop();
@@ -138,7 +139,20 @@ void TcpServer::markOfflineAndBroadcast(int userId) {
         lanchat::protocol::MsgType::UserOffline));
     payload["id"] = vendor::json::Value(userId);
     payload["nickname"] = vendor::json::Value(user->nickname);
-    broadcast(vendor::json::serialize(vendor::json::Value(payload)));
+    const auto json = vendor::json::serialize(vendor::json::Value(payload));
+    vendor::json::Object employee=payload;employee["status"]=vendor::json::Value("failed");
+    vendor::json::Object event{{"type",vendor::json::Value(61)},{"groupId",vendor::json::Value(0)},
+        {"users",vendor::json::Value(vendor::json::Array{vendor::json::Value(employee)})}};
+    for(const auto& target:sessions_.all())if(target->authenticated())target->deliver(vendor::json::serialize(vendor::json::Value(event)));
+    // 只通知好友，与在线广播对称（MessageRouter::broadcastPresence 的
+    // FriendOnline 也只发好友）。原先 broadcast 给所有会话，会让非好友
+    // 收到"从未见其上线的人"的离线噪声（审计发现的路由不对称）。
+    for (const auto& friendUser : friends_.getFriends(userId)) {
+        auto target = sessions_.findByUserId(friendUser.id);
+        if (target) {
+            target->deliver(json);
+        }
+    }
 }
 
 } // namespace lanchat::server

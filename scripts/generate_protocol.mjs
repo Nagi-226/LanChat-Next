@@ -28,6 +28,11 @@ function schemaFor(message) {
     properties[fieldName] = fieldName === 'type'
       ? { const: message.value }
       : schemaForField(fieldName);
+    if (message.name === 'Login' && fieldName === 'id') {
+      properties.id = { oneOf: [schemaForField('id'), {type: 'string', minLength: 1, maxLength: 64}] };
+    }
+    if (['GroupMembers', 'GroupMembersReturn', 'AttachmentRequest', 'HistoryResponse'].includes(message.name)
+        && ['groupId', 'toId'].includes(fieldName)) properties[fieldName].minimum = 0;
   }
 
   const schema = {
@@ -91,7 +96,7 @@ function generateTypes() {
   }
   lines.push('}');
   lines.push('');
-  lines.push("export type ContentType = 'text' | 'image' | 'file' | 'system';");
+  lines.push("export type ContentType = 'text' | 'image' | 'file' | 'sticker' | 'system';");
   lines.push("export type AIRequestType = 'summarize' | 'translate' | 'search' | 'chat';");
   lines.push("export type ProtocolStatus = 'ok' | 'error' | 'failed' | 'start' | 'done';");
   lines.push('');
@@ -124,7 +129,8 @@ function generateTypes() {
     lines.push(`  type: MsgType.${message.name};`);
     for (const fieldName of fields) {
       const optional = optionalOnly.has(fieldName) ? '?' : '';
-      lines.push(`  ${fieldName}${optional}: ${tsTypeFor(fieldName)};`);
+      const tsType = message.name === 'Login' && fieldName === 'id' ? 'number | string' : tsTypeFor(fieldName);
+      lines.push(`  ${fieldName}${optional}: ${tsType};`);
     }
     lines.push('}');
     lines.push('');
@@ -143,7 +149,7 @@ function generateTypes() {
   lines.push('};');
   lines.push('');
   lines.push('export function isValidMsgType(value: number): value is MsgType {');
-  lines.push(`  return Number.isInteger(value) && value >= MsgType.RegisterUser && value <= MsgType.${definitions.messages.at(-1).name};`);
+  lines.push(`  return Number.isInteger(value) && [${definitions.messages.map(m => m.value).join(', ')}].includes(value);`);
   lines.push('}');
   lines.push('');
   return `${lines.join('\n')}\n`;

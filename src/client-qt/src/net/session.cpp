@@ -21,6 +21,8 @@ Session::Session(QObject* parent) : QObject(parent)
 
 void Session::connectToServer(const QString& host, quint16 port)
 {
+    if(host_!=host||port_!=port) {pendingUser_.clear();pendingPass_.clear();pendingNumericId_=0;selfId_=0;selfNick_.clear();fb_=FrameBuffer{};}
+    reconnectTimer_.stop(); heartbeatTimer_.stop();
     host_ = host;
     port_ = port;
     wantConnected_ = true;
@@ -54,6 +56,7 @@ void Session::loginNumeric(int id, const QString& password)
 
 void Session::registerUser(const QString& nickname, const QString& password)
 {
+    if(sock_.state()!=QAbstractSocket::ConnectedState){emit authError("尚未连接服务器，请等待连接完成");return;}
     send(protocol::registerUser(nickname, password));
 }
 
@@ -94,7 +97,7 @@ void Session::logout()
     reconnectTimer_.stop();
     sock_.disconnectFromHost();
     selfId_ = 0;
-    selfNick_.clear();
+    selfNick_.clear(); pendingPass_.clear(); pendingUser_.clear(); fb_=FrameBuffer{};
     emit stateChanged("已 logout");
 }
 
@@ -182,6 +185,11 @@ void Session::dispatch(const QJsonObject& obj)
 {
     const int type = obj.value("type").toInt(-1);
     switch (type) {
+    case 1:
+        if(obj.value("status").toString()=="ok") emit registered(obj.value("id").toInt());
+        else emit authError(obj.value("msg").toString());
+        break;
+    case 71: emit attachmentResponse(obj); break;
     case 3: { // LoginSuccessReturn
         selfId_ = obj.value("id").toInt();
         selfNick_ = obj.value("nickname").toString();
@@ -191,6 +199,7 @@ void Session::dispatch(const QJsonObject& obj)
         emit usersReceived(obj);
         break;
     }
+    case 61: // Actual group members
     case 10: // CreateGroupReturn
     case 14: // JoinGroupReturn
     case 18: // UserJoinGroup
@@ -232,3 +241,9 @@ void Session::dispatch(const QJsonObject& obj)
         break; // 未知 type 忽略（subset 之外）
     }
 }
+void Session::leaveGroup(int id){send({{"type",15},{"id",selfId_},{"groupId",id}});}
+void Session::requestMembers(int id){send({{"type",60},{"groupId",id}});}
+void Session::requestConversationHistory(int id,bool group,const QString& before){
+    send({{"type",24},{"id",selfId_},{group?"groupId":"toId",id},{"limit",50},{"before",before}});
+}
+void Session::sendAttachment(const QJsonObject& object){if(selfId_>0)send(object);}

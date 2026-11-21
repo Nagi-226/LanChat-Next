@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lanchat-next.local/protocol/schemas/attachmentRequest.schema.json",
+  "title": "LanChat attachmentRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "op",
+    "request_id"
+  ],
+  "properties": {
+    "type": {
+      "const": 70
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "msg_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "op": {
+      "type": "string",
+      "enum": [
+        "begin",
+        "upload",
+        "finish",
+        "download",
+        "cancel"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "attachment_id": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "upload_id": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "toId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "groupId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "file_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "file_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "content_type": {
+      "enum": [
+        "text",
+        "image",
+        "file",
+        "system",
+        "sticker"
+      ]
+    },
+    "offset": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "data": {
+      "type": "string",
+      "maxLength": 65536
+    }
+  },
+  "$defs": {
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "nickname"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "headId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error",
+            "failed",
+            "start",
+            "done"
+          ]
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "groupId",
+        "name"
+      ],
+      "properties": {
+        "groupId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "hostId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/user"
+          }
+        }
+      }
+    }
+  }
+}

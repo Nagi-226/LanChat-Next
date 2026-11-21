@@ -27,6 +27,8 @@ void AsyncSession::start() {
 }
 
 void AsyncSession::deliver(const std::string& json) {
+    size_t pending=0; for(const auto& frame:write_queue_) pending+=frame.size();
+    if(pending+json.size()>8*1024*1024) { close(); return; }
     auto frame = FrameCodec::encode(json);
     write_queue_.push_back(
         std::string(reinterpret_cast<const char*>(frame.data()), frame.size()));
@@ -96,7 +98,13 @@ void AsyncSession::doWrite() {
 }
 
 void AsyncSession::onMessage(const std::string& json) {
-    if (!consumeRateLimitToken()) {
+    bool parsed=false;
+    auto frame=protocol_json::parseObject(json,parsed);
+    bool bulk=parsed && protocol_json::intField(frame,"type")==70 && userId()>0;
+    const auto now=std::chrono::steady_clock::now();
+    if(now-bulk_window_>=std::chrono::seconds(1)) { bulk_window_=now; bulk_bytes_=0; }
+    if(bulk) bulk_bytes_+=json.size();
+    if ((bulk && bulk_bytes_>64*1024*1024) || (!bulk && !consumeRateLimitToken())) {
         ServerLogger::instance().info(
             "session " + std::to_string(id_) + " exceeded rate limit, closing");
         server_.removeSession(id_);

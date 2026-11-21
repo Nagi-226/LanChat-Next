@@ -49,13 +49,17 @@
         "text",
         "image",
         "file",
-        "system"
+        "system",
+        "sticker"
       ]
     },
     "reply_to": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128
+    },
+    "attachment": {
+      "type": "object"
     }
   },
   "$defs": {
