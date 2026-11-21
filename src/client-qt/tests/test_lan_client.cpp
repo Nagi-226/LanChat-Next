@@ -77,6 +77,12 @@ int main(int argc,char** argv){
     // Switching conversations reloads server history and merges without repeated bubbles.
     auto* contacts=wb.findChild<ContactsPanel*>();emit contacts->contactSelected(a.selfId());emit contacts->groupSelected(gid);QTest::qWait(200);assert(sb.conversation(Store::groupKey(gid)).size()==4);
     assert(chatB->findChildren<QWidget*>("attachmentCard").size()>=3);
+    // Restored/paused transfers must obey the same four-active limit as new transfers.
+    {TransferManager limited(&a);emit a.ready(a.selfId(),a.selfNick());QStringList ids;
+        for(int i=0;i<5;++i){auto id=limited.upload(path,0,gid);assert(!id.isEmpty());limited.pause(id);ids.append(id);}
+        for(int i=0;i<4;++i)limited.resume(ids[i]);QSignalSpy errors(&limited,&TransferManager::error);limited.resume(ids[4]);
+        assert(errors.size()==1);int active=0;for(auto t:limited.tasks())if(t.active)++active;assert(active==4);
+        for(auto id:ids)limited.cancel(id);}
     // Paused tasks survive manager destruction and are scoped to account and server.
     QString resumeId;
     {TransferManager temporary(&a);emit a.ready(a.selfId(),a.selfNick());resumeId=temporary.upload(path,0,gid);temporary.pause(resumeId);}

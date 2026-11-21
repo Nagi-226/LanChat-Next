@@ -114,6 +114,8 @@ void TransferManager::response(const QJsonObject& o) {
 void TransferManager::pause(const QString& id) {if(!tasks_.contains(id))return;tasks_[id].active=false;tasks_[id].state="已暂停，可继续";persist();emit changed();}
 void TransferManager::resume(const QString& id) {
     if(!tasks_.contains(id)||session_->selfId()!=tasks_[id].uid||tasks_[id].state=="已完成"||tasks_[id].active)return;
+    int running=0;for(const auto& t:tasks_)if(t.active)++running;
+    if(running>=4){emit error("最多同时进行 4 项传输");return;}
     auto& t=tasks_[id];t.active=true;
     if(t.upload && (QFileInfo(t.path).size()!=t.size||digest(t.path)!=t.hash)){t.active=false;t.state="原文件已改变，请重新发送";emit changed();return;}
     if(!t.upload){t.offset=QFileInfo(t.path+".part").exists()?QFileInfo(t.path+".part").size():0;}
