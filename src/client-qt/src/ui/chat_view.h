@@ -1,21 +1,14 @@
-// chat_view.h —— 聊天区：气泡列表 + 输入框 + 发送。
-// 气泡 delegate：自己发的靠右 accent 色，对方靠左 panel 色（圆角矩形）。
+// chat_view.h —— 中栏：会话头 56px + 可滚动消息区 + 输入区。
+// 气泡：对方 #212630 圆角12(左上4)，自己 accent 蓝白字右对齐(右上4)；32px 圆头像；
+// 名字+时间行；连续同发送者<5min 分组（隐藏头像/名字行、收紧间距）；空状态居中提示+淡图标。
 #pragma once
 
 #include <QWidget>
-#include <QStyledItemDelegate>
 
-class QListWidget;
 class QLineEdit;
-class QListWidgetItem;
 class QLabel;
-
-class BubbleDelegate : public QStyledItemDelegate {
-public:
-    int selfId = 0;
-    void paint(QPainter* p, const QStyleOptionViewItem& opt, const QModelIndex& i) const override;
-    QSize sizeHint(const QStyleOptionViewItem& opt, const QModelIndex& i) const override;
-};
+class QVBoxLayout;
+class QScrollArea;
 
 class ChatView : public QWidget {
     Q_OBJECT
@@ -23,15 +16,24 @@ public:
     explicit ChatView(QWidget* parent = nullptr);
     void setSelfId(int id);
     void setPeerLabel(const QString& text);
-    void appendMessage(int fromId, const QString& text);
+    // grouped=true 时隐藏头像与名字行、收紧上间距
+    // alertLevel>0 时渲染为板端告警卡片（1提示/2警告/3严重），不用普通气泡
+    void appendMessage(int fromId, const QString& senderName, const QString& text,
+                       qint64 ts, bool grouped, int alertLevel = 0);
     void clear();
 
 signals:
     void sendRequested(const QString& text);
 
 private:
-    QListWidget* list_;
-    QLineEdit* input_;
-    BubbleDelegate* delegate_;
+    void updateEmptyState();
+    int selfId_ = 0;
     QLabel* peer_;
+    QScrollArea* scroll_;
+    QWidget* msgBody_;
+    QVBoxLayout* msgLay_;
+    QWidget* empty_;
+    QLineEdit* input_;
+    int lastFrom_ = -1;
+    qint64 lastTs_ = 0;
 };

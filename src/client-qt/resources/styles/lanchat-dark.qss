@@ -1,0 +1,168 @@
+/* LanChat-Next 暗色主题 —— 设计令牌照抄 mockup，仅用 Qt QSS 支持的特性。
+   背景四层靠明度差分层，不加额外描边。圆角/间距/字体阶梯见设计稿。
+   注意：flex/gap/box-shadow/transition/letter-spacing/uppercase/::before 均不用
+   （Qt 静默失效），改用布局/QFont/QFrame/代码实现。
+   派生令牌（披露）：原 --text-muted #66707F 在 #161920 上对比度仅 3.51，
+   达不到规格要求的小字 ≥4.5，故小字（时间戳/预览/分节/空提示）用派生 #8A94A4（≈4.6）；
+   自气泡底色用 --accent-hover #3D6AE8 使白字 ≥4.5（原 #4C7DFF 白字仅 3.69）。
+   其余令牌照抄未改。 */
+
+/* ── 全局 ── */
+QWidget {
+    background-color: #161920;
+    color: #E7EAF0;
+    font-family: "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 13.5px;
+}
+QMainWindow, QDialog { background-color: #0E1014; }
+
+/* ── 输入框 ── */
+QLineEdit, QTextEdit, QPlainTextEdit {
+    background-color: #0E1014;
+    border: 1px solid #272C37;
+    border-radius: 7px;
+    padding: 8px 12px;
+    color: #E7EAF0;
+    selection-background-color: #4C7DFF;
+}
+QLineEdit:focus, QTextEdit:focus { border: 1px solid #4C7DFF; }
+
+/* ── 按钮两档 ── */
+QPushButton {
+    background-color: #1D212A;
+    border: 1px solid #272C37;
+    border-radius: 7px;
+    padding: 8px 16px;
+    color: #98A1B2;
+    font-size: 13px;
+    font-weight: 500;
+}
+QPushButton:hover { background-color: #232833; color: #E7EAF0; }
+QPushButton:pressed { background-color: #2A3040; }
+QPushButton#primary {
+    background-color: #4C7DFF;
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+}
+QPushButton#primary:hover { background-color: #3D6AE8; }
+QPushButton#flat { background-color: transparent; border: none; color: #66707F; }
+QPushButton#flat:hover { color: #98A1B2; }
+QPushButton#icon {
+    background-color: transparent; border: none; color: #66707F;
+    padding: 4px; min-width: 28px; max-height: 28px;
+}
+QPushButton#icon:hover { background-color: #232833; color: #E7EAF0; }
+
+/* ── 列表/滚动区 ── */
+QListWidget, QListView, QTreeWidget, QTableView, QScrollArea {
+    background-color: #161920;
+    border: none;
+    outline: none;
+}
+QScrollArea > QWidget > QWidget { background-color: #161920; }
+
+/* ── 滚动条 ── */
+QScrollBar:vertical { width: 8px; background: transparent; }
+QScrollBar::handle:vertical { background: #2A2F3A; border-radius: 4px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background: #3A4050; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar:horizontal { height: 8px; background: transparent; }
+QScrollBar::handle:horizontal { background: #2A2F3A; border-radius: 4px; min-width: 24px; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+
+/* ── 文本层级 ── */
+QLabel#headerTitle { font-size: 14.5px; font-weight: 600; color: #E7EAF0; }
+QLabel#sectionTitle { font-size: 10.5px; font-weight: 600; color: #8A94A4; }
+QLabel#contactName { font-size: 13px; font-weight: 500; color: #E7EAF0; }
+QLabel#preview { font-size: 11.5px; color: #8A94A4; }
+QLabel#timestamp { font-size: 10.5px; color: #8A94A4; }
+QLabel#muted { color: #66707F; }
+QLabel#err { color: #E85C5C; }
+QLabel#emptyHint { color: #8A94A4; font-size: 13px; }
+QLabel#bubbleSelf {
+    background-color: #3D6AE8; color: #ffffff;
+    border-radius: 12px; border-top-right-radius: 4px;
+    padding: 8px 12px; font-size: 13.5px;
+}
+QLabel#bubblePeer {
+    background-color: #212630; color: #E7EAF0;
+    border-radius: 12px; border-top-left-radius: 4px;
+    padding: 8px 12px; font-size: 13.5px;
+}
+QLabel#msgName { font-size: 11.5px; font-weight: 500; color: #98A1B2; }
+
+/* ── 联系人/成员行：选中=浅底+左竖条(竖条用 QFrame)，悬停=hover ── */
+QWidget#contactRow { background-color: transparent; border-radius: 8px; }
+QWidget#contactRow:hover { background-color: #232833; }
+QWidget#contactRow[hovered="true"] { background-color: #232833; }
+QWidget#contactRow[selected="true"] { background-color: #2A3040; }
+QWidget#memberRow { background-color: transparent; border-radius: 8px; }
+QWidget#memberRow:hover { background-color: #232833; }
+
+/* ── 在线/离开点 ── */
+QLabel#dotOnline { background-color: #3DDC97; border-radius: 4px; }
+QLabel#dotIdle { background-color: #E8A33D; border-radius: 4px; }
+
+/* ── 未读徽标 ── */
+QLabel#unread {
+    background-color: #4C7DFF; color: #ffffff;
+    border-radius: 9px; font-size: 10.5px; font-weight: 600;
+    min-width: 18px; max-height: 18px; padding: 0 4px;
+}
+
+/* ── 卡片/分节容器 ── */
+QFrame#card { background-color: #1D212A; border-radius: 8px; }
+QFrame#accentBar { background-color: #4C7DFF; border-radius: 1px; }
+QFrame#divider { background-color: #272C37; max-height: 1px; }
+
+/* ── 其它 ── */
+QComboBox { background-color: #0E1014; border: 1px solid #272C37; border-radius: 7px; padding: 4px 8px; }
+QComboBox QAbstractItemView { background-color: #1D212A; selection-background-color: #2A3040; }
+QToolTip { background-color: #1D212A; color: #E7EAF0; border: 1px solid #272C37; }
+QInputDialog, QMessageBox { background-color: #161920; }
+
+/* ── 记住账户勾选框 ── */
+QCheckBox#remember { color: #8A94A4; font-size: 12px; spacing: 6px; }
+QCheckBox#remember::indicator {
+    width: 14px; height: 14px;
+    border: 1px solid #3A4050; border-radius: 4px;
+    background-color: #0E1014;
+}
+QCheckBox#remember::indicator:checked {
+    background-color: #4C7DFF; border-color: #4C7DFF;
+    image: none;
+}
+QCheckBox#remember::indicator:hover { border-color: #4C7DFF; }
+
+/* ── 板端告警：左栏行 + 会话内卡片 ── */
+QPushButton#gearBtn {
+    background-color: transparent; color: #8A94A4;
+    border: none; border-radius: 4px; font-size: 12px;
+}
+QPushButton#gearBtn:hover { background-color: #232833; color: #E7EAF0; }
+QWidget#alertRow { background-color: transparent; border-radius: 8px; }
+QWidget#alertRow:hover { background-color: #232833; }
+QLabel#alertText { font-size: 12px; color: #E7EAF0; }
+QLabel#dotDanger { background-color: #E85C5C; border-radius: 4px; }
+QLabel#dotInfo { background-color: #4C7DFF; border-radius: 4px; }
+QWidget#alertCard {
+    background-color: #212630;
+    border: 1px solid #272C37; border-left: 3px solid #4C7DFF;
+    border-radius: 10px;
+}
+QWidget#alertCard[level="2"] { border-left-color: #E8A33D; background-color: #2A2620; }
+QWidget#alertCard[level="3"] { border-left-color: #E85C5C; background-color: #2A2024; }
+QLabel#alertBody { font-size: 13px; color: #E7EAF0; }
+QLabel#chipInfo {
+    background-color: #1A2436; color: #7FA3FF;
+    border-radius: 4px; padding: 1px 6px; font-size: 10.5px; font-weight: 600;
+}
+QLabel#chipWarn {
+    background-color: #332A1C; color: #E8A33D;
+    border-radius: 4px; padding: 1px 6px; font-size: 10.5px; font-weight: 600;
+}
+QLabel#chipDanger {
+    background-color: #332024; color: #E85C5C;
+    border-radius: 4px; padding: 1px 6px; font-size: 10.5px; font-weight: 600;
+}

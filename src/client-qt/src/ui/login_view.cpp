@@ -1,5 +1,8 @@
 #include "ui/login_view.h"
 
+#include "app/credentials.h"
+
+#include <QCheckBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -21,6 +24,15 @@ LoginView::LoginView(QWidget* parent) : QWidget(parent)
     pass_ = new QLineEdit(card);
     pass_->setPlaceholderText("密码");
     pass_->setEchoMode(QLineEdit::Password);
+    // 记住账户：勾选后下次启动预填用户名和密码（密码经 DPAPI 加密落盘，见 credentials.cpp）
+    remember_ = new QCheckBox("记住账户，下次自动填写", card);
+    remember_->setObjectName("remember");
+    const auto saved = credentials::load();
+    if (saved.remembered) {
+        user_->setText(saved.username);
+        pass_->setText(saved.password);
+        remember_->setChecked(true);
+    }
     auto* go = new QPushButton("登录", card);
     go->setObjectName("primary");
     err_ = new QLabel(card);
@@ -30,6 +42,7 @@ LoginView::LoginView(QWidget* parent) : QWidget(parent)
     lay->addWidget(title, 0, Qt::AlignHCenter);
     lay->addWidget(user_);
     lay->addWidget(pass_);
+    lay->addWidget(remember_);
     lay->addWidget(go);
     lay->addWidget(err_, 0, Qt::AlignHCenter);
     lay->addWidget(reg, 0, Qt::AlignHCenter);
@@ -44,3 +57,5 @@ LoginView::LoginView(QWidget* parent) : QWidget(parent)
 }
 
 void LoginView::showError(const QString& msg) { err_->setText(msg); }
+
+bool LoginView::rememberChecked() const { return remember_->isChecked(); }

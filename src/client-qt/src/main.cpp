@@ -2,6 +2,8 @@
 // --grab <png>：offscreen 目检 hook（配合 QT_QPA_PLATFORM=offscreen），截图后退出。
 #include <QApplication>
 #include <QTimer>
+#include <QPixmap>
+#include <cstdio>
 
 #include "app/devmode.h"
 #include "app/server_process.h"
@@ -28,10 +30,21 @@ int main(int argc, char** argv)
     sess.connectToServer("127.0.0.1", 12346);
 
     for (int i = 1; i < argc; ++i) {
-        if (qstrcmp(argv[i], "--grab") == 0 && i + 1 < argc) {
+        if (qstrcmp(argv[i], "--demo") == 0) {
+            w.loadDemoData(true);
+        } else if (qstrcmp(argv[i], "--demo-board") == 0) {
+            w.loadDemoData(true, true);
+        } else if (qstrcmp(argv[i], "--demo-empty") == 0) {
+            w.loadDemoData(false);
+        } else if (qstrcmp(argv[i], "--width") == 0 && i + 1 < argc) {
+            w.resize(QString::fromLocal8Bit(argv[i + 1]).toInt(), 800);
+        } else if (qstrcmp(argv[i], "--grab") == 0 && i + 1 < argc) {
             const QString path = QString::fromLocal8Bit(argv[i + 1]);
-            QTimer::singleShot(600, &app, [&] {
-                w.grab().save(path);
+            QTimer::singleShot(600, &app, [path, &w, &app] {
+                const QPixmap pm = w.grab();
+                const bool ok = pm.save(path);
+                std::fprintf(stderr, "grab %dx%d ok=%d path=%s\n",
+                             pm.width(), pm.height(), int(ok), qPrintable(path));
                 app.quit();
             });
         }
