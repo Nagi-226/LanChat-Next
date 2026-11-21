@@ -113,17 +113,30 @@ Step 'windeployqt ...'
 if ($LASTEXITCODE -ne 0) { Fail 'windeployqt 失败' }
 
 # ── 5. 桌面快捷方式 ──────────────────────────────────────────────
+# 桌面可能被 OneDrive 重定向，实际存在两处：
+#   [Environment]::GetFolderPath('Desktop')  → 通常是 OneDrive\桌面（真桌面）
+#   $env:USERPROFILE\Desktop                 → 旧路径，可能残留一份旧的 .lnk
+# 两处都要更新，否则用户看到的可能是残留的那份旧图标。
 if (-not $SkipShortcut) {
-  $desktop = [Environment]::GetFolderPath('Desktop')
-  $lnk     = Join-Path $desktop 'LanChat-Next.lnk'
-  $sh      = New-Object -ComObject WScript.Shell
-  $sc      = $sh.CreateShortcut($lnk)
-  $sc.TargetPath       = $dstExe
-  $sc.WorkingDirectory = $deployDir
-  $sc.Description      = 'LanChat-Next (Qt6 native client)'
-  $sc.IconLocation     = "$dstExe,0"
-  $sc.Save()
-  Step "桌面快捷方式已更新：$lnk"
+  $desktopDirs = @(
+    [Environment]::GetFolderPath('Desktop'),
+    (Join-Path $env:USERPROFILE 'Desktop')
+  ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+  $sh = New-Object -ComObject WScript.Shell
+  foreach ($dir in $desktopDirs) {
+    $lnk = Join-Path $dir 'LanChat-Next.lnk'
+    $isNew = -not (Test-Path $lnk)
+    # 只更新已存在的，和在真桌面上新建；不要在旧路径凭空造一个新的
+    if ($isNew -and $dir -ne $desktopDirs[0]) { continue }
+    $sc = $sh.CreateShortcut($lnk)
+    $sc.TargetPath       = $dstExe
+    $sc.WorkingDirectory = $deployDir
+    $sc.Description      = 'LanChat-Next (Qt6 native client)'
+    $sc.IconLocation     = "$dstExe,0"
+    $sc.Save()
+    Step ("桌面快捷方式已{0}：{1}" -f $(if ($isNew) { '创建' } else { '更新' }), $lnk)
+  }
 }
 
 # ── 6. 自检 ──────────────────────────────────────────────────────

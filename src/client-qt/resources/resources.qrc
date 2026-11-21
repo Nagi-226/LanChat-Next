@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>styles/lanchat-dark.qss</file>
+        <file>icons/lanchat-256.png</file>
     </qresource>
 </RCC>

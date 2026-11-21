@@ -1,0 +1,7 @@
+// app.rc —— Windows PE 资源：可执行文件图标
+//
+// IDI_ICON1 是 Windows 约定的第一个图标资源 ID；Explorer / 任务栏在 exe 未指定
+// 其它图标时取它。路径相对于本 .rc 文件所在目录（resources/）。
+//
+// 判据不是"构建成功"：要解 PE 资源树看 RT_GROUP_ICON(14) 与 RT_ICON(3) 是否存在。
+IDI_ICON1 ICON "icons/lanchat.ico"

@@ -104,6 +104,36 @@ else()
 endif()
 
 # 主客户端目标（WIN32 = 无控制台窗口）
+#
+# Windows 下把图标嵌进 PE 资源（Explorer / 任务栏取的是它）。
+#
+# ⚠️ 不能用 `enable_language(RC)`：仓库路径含空格（`E:/Github Project/...`），
+#    CMake 的 RC 规则会注入 `-I "E:/Github Project/..."`，windres 按空格切开，
+#    报 `cc1.exe: fatal error: Project/...: No such file`。
+#    正确做法是自建 custom command 调 windres，且**一个 -I 都不给**
+#    （app.rc 只引用 .ico，不需要任何 C 头文件）。
+#    找不到 windres 时只警告不失败 —— 图标是装饰，不该阻断构建。
+set(LANCHAT_WIN_RESOURCES "")
+if(WIN32)
+    get_filename_component(_cxx_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    find_program(WINDRES_EXE NAMES windres HINTS "${_cxx_dir}")
+    if(WINDRES_EXE)
+        set(_rc     "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
+        set(_rc_ico "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/lanchat.ico")
+        set(_rc_obj "${CMAKE_CURRENT_BINARY_DIR}/app_icon_rc.obj")
+        add_custom_command(
+            OUTPUT  "${_rc_obj}"
+            COMMAND "${WINDRES_EXE}" -O coff -o "${_rc_obj}" "${_rc}"
+            DEPENDS "${_rc}" "${_rc_ico}"
+            COMMENT "windres: 把 lanchat.ico 嵌入 exe 资源"
+            VERBATIM)
+        set(LANCHAT_WIN_RESOURCES "${_rc_obj}")
+    else()
+        message(WARNING
+            "未找到 windres，exe 将没有文件图标（运行时窗口/任务栏图标仍由 qrc 提供）。")
+    endif()
+endif()
+
 add_executable(lanchat_qt WIN32
     src/main.cpp
     src/net/frame_buffer.cpp
@@ -122,6 +152,7 @@ add_executable(lanchat_qt WIN32
     src/ui/members_panel.cpp
     src/ui/main_window.cpp
     resources/resources.qrc
+    ${LANCHAT_WIN_RESOURCES}
 )
 target_include_directories(lanchat_qt PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
