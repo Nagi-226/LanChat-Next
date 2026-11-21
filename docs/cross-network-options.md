@@ -1,6 +1,14 @@
 # 不自建公网服务器的跨网络通信方案
 
-资料核查：2026-11-21。此文是调查，尚未安装组网、创建云账号、部署中继或接入新协议。
+资料核查与用户决策：2026-11-21。**已确定采用 Tailscale 托管组网**，保留常开 LanChat 主机；尚未安装组网、创建云账号、部署中继或接入新协议。
+
+## 已确定的实施方向
+
+当前 LanChat 使用明确的主机地址和 TCP 端口，不依赖跨网络广播发现，因此先采用 Tailscale 的加密 IP 通道。ZeroTier 保留为后续需要虚拟以太网 / 广播发现时的备选资料。
+
+异地 PC → Tailscale → 常开 LanChat 主机 → 本地 Console → S3。S3 继续使用本地 2.4 GHz Wi-Fi 和 VVOS TCP，不在 MCU 上安装组网客户端。托管控制与必要的中继不替代消息主机；聊天历史和附件仍存放在消息主机。
+
+下一轮先实现“感知 / 链路 / 设备 / 帮助”四项只读查询，再配置和验收 Tailscale；外部大模型 API 为后续阶段。具体职责、验收和继续入口见[下一轮实施清单](next-steps-20261122.md)。
 
 ## 推荐顺序
 
@@ -18,7 +26,11 @@
 
 ## 为什么仍可能有服务器
 
-Tailscale 官方文档确认：设备优先尝试直接连接；受 NAT 或防火墙限制时可回退 DERP。DERP 转发 WireGuard 已加密的数据，无法解密流量。默认可使用 Tailscale 运营的 DERP，无需自行部署。**“不用自己运维服务器”可以做到；“网络上完全不使用服务器而且始终可靠”无法作为通用保证。**
+Tailscale 控制服务管理设备身份、公钥与访问策略；数据通道使用 WireGuard。当前官方连接机制通过 DERP 协商，然后尝试 NAT 穿透以升级为直接 UDP 通道；无法直连时，可使用已配置的 Peer Relay 或保持 DERP 中继。DERP 转发已加密的数据，不能解密聊天流量。默认可使用 Tailscale 运营的 DERP，无需自行部署。
+
+ZeroTier 使用底层加密 P2P 传输 VL1 与上层虚拟以太网 VL2。根节点帮助设备发现与连接；Central 控制器管理网络配置、成员授权和签名凭证。私有网络输入 Network ID 后仍需授权，能够直连时数据在设备间传输，否则使用中继。
+
+两种方案都依赖网络基础设施；托管组网可以减少自行运维公网服务的工作，但不能保证所有 NAT 下始终直接连接。
 
 SimpleX 把持久聊天数据保存在客户端，服务器承担中继；可以使用应用预配置的公共服务器。Jami 官方文章也明确说明引导、名字查询、移动推送/OpenDHT 代理和 TURN 等场景使用服务器，尤其 TURN 用于无法建立 P2P 时的转发。这两种架构都应继续评估群聊、离线文件及企业账号治理。
 
@@ -32,7 +44,9 @@ SimpleX 把持久聊天数据保存在客户端，服务器承担中继；可以
 
 - [Tailscale 源码与平台范围](https://github.com/tailscale/tailscale)，本次读取官方 README。
 - [Tailscale DERP 文档](https://tailscale.com/kb/1232/derp-servers)，本次读取直连回退、WireGuard 加密和默认 DERP 说明。
+- [Tailscale 连接类型](https://tailscale.com/kb/1257/connection-types)、[MagicDNS](https://tailscale.com/kb/1081/magicdns)、[子网网关](https://tailscale.com/kb/1019/subnets)，用于核查连接协商、名称访问与不运行客户端的设备接入方式。
 - [ZeroTier 源码](https://github.com/zerotier/ZeroTierOne)；[Central 入门](https://docs.zerotier.com/start/)，本次核查网络 ID、终端安装和组织网络管理流程。
+- [ZeroTier 协议](https://docs.zerotier.com/protocol/)，用于核查 VL1 / VL2、控制器、根节点与中继职责。
 - [SimpleX Chat](https://github.com/simplex-chat/simplex-chat)；[平台设计](https://github.com/simplex-chat/simplex-chat/blob/stable/docs/SIMPLEX.md)，本次读取公共中继、客户端数据和 SDK/bot 边界说明。
 - [Jami 官方：为什么是分布式](https://jami.net/why-is-jami-truly-distributed/)，2019 年架构解释，用于说明辅助服务器角色；其内容不作为 2026 年完整功能/性能验收。
 

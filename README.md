@@ -114,9 +114,13 @@ ctest --test-dir build-qt --output-on-failure
 
 ## 下一步
 
+- **已确定采用 Tailscale 托管组网**：保留常开消息主机，S3 经本地 Console 桥接；尚未配置或验收异地连接。
+- **先实现四项只读反馈查询**：感知 / 链路 / 设备 / 帮助，由 Console 路由并回复原会话；现有终端尚无此查询回复功能。
+- **后续评估外部大模型 API**：提供自然语言理解和自由对话，优先由 PC / Console 调用模型、S3 提供真实状态与显示。
 - **专用 Unicode 表情选择面板**（本轮按用户要求仅发送普通 Unicode 文字表情）。
 - 组织权限/入群审批、TLS、审计/附件留存管理、公司规模压力测试、移动客户端。
-- [异地连接方案调查](docs/cross-network-options.md)：优先 Tailscale/ZeroTier 托管组网；若不保留常开消息主机，再评估 SimpleX/Jami 协议。尚未部署外网服务。
+
+2026-11-21 用户决策及 2026-11-22 继续入口：[下一轮实施清单](docs/next-steps-20261122.md)。顺序为四项查询 → Tailscale 异地验收 → 后续外部模型评估；[异地连接调查](docs/cross-network-options.md)保留 ZeroTier / SimpleX / Jami 的比较资料。
 
 协议与实现说明：[附件协议](docs/attachment-protocol.md)、[局域网部署](docs/lan-deployment.md)、[板端面板](docs/board-panel.md)。
 
