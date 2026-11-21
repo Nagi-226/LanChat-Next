@@ -42,6 +42,26 @@ QByteArray unprotect(const QByteArray& cipher)
 #endif
 } // namespace
 
+QByteArray encryptSecret(const QString& password)
+{
+#ifdef Q_OS_WIN
+    return protect(password.toUtf8()).toBase64();
+#else
+    Q_UNUSED(password);
+    return {};
+#endif
+}
+
+QString decryptSecret(const QByteArray& encoded)
+{
+#ifdef Q_OS_WIN
+    return QString::fromUtf8(unprotect(QByteArray::fromBase64(encoded)));
+#else
+    Q_UNUSED(encoded);
+    return {};
+#endif
+}
+
 SavedLogin load()
 {
     QSettings s;

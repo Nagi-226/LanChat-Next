@@ -243,6 +243,7 @@ void ContactsPanel::setAlerts(const QList<AlertItem>& items)
         row->setAttribute(Qt::WA_StyledBackground, true);
         row->setProperty("rowId", a.peerId);
         row->setProperty("rowIsAlert", true);
+        row->setProperty("rowIsGroup", a.isGroup);
         row->setCursor(Qt::PointingHandCursor);
         auto* h = new QHBoxLayout(row);
         h->setContentsMargins(8, 6, 8, 6);
@@ -298,7 +299,7 @@ bool ContactsPanel::eventFilter(QObject* obj, QEvent* e)
         auto* w = qobject_cast<QWidget*>(obj);
         if (w && w->property("rowId").isValid()) {
             const int id = w->property("rowId").toInt();
-            if (w->property("rowIsAlert").toBool()) emit alertSelected(id);
+            if (w->property("rowIsAlert").toBool()) emit alertSelected(id, w->property("rowIsGroup").toBool());
             else if (w->property("rowIsGroup").toBool()) emit groupSelected(id);
             else emit contactSelected(id);
             return true;

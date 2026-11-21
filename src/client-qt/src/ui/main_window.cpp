@@ -1,6 +1,8 @@
 #include "ui/main_window.h"
 
 #include "app/credentials.h"
+#include "app/board_connection.h"
+#include "ui/board_connection_panel.h"
 #include "app/devmode.h"
 #include "model/store.h"
 #include "net/session.h"
@@ -23,6 +25,7 @@
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QTimer>
 
 namespace {
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
@@ -40,8 +43,18 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     resize(1300, 800);
     // 板端账号：Console 桥登录用的那个 LanChat 账号 id；左栏齿轮可改，存 ini
     boardId_ = QSettings().value("board_account_id", 0).toInt();
+    bridge_ = new BoardConnection(this);
+    if (bridge_->config().accountId > 0) boardId_ = bridge_->config().accountId;
+    connect(bridge_, &BoardConnection::accountChanged, this, [this](int id) {
+        if (id > 0) {
+            boardId_ = id;
+            QSettings().setValue("board_account_id", id);
+        }
+    });
+    QTimer::singleShot(700, this, [this] { if (bridge_->config().autoStart) bridge_->start(); });
 
     stack_ = new QStackedWidget(this);
+    stack_->setObjectName("mainPages");
     login_ = new LoginView(this);
     reg_ = new RegisterView(this);
     stack_->addWidget(login_);
@@ -69,12 +82,14 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     });
     connect(sess_, &Session::ready, this, [this](int uid, const QString&) {
         selfId_ = uid;
+        bridge_->setDefaultRecipient(uid);
         store_->setSelfId(uid);
         chat_->setSelfId(uid);
         // 记住账户只在登录成功后落盘：错密码不会被记下来
         if (login_->rememberChecked()) credentials::save(pendingUser_, pendingPass_);
         else credentials::clear();
-        stack_->setCurrentIndex(2);
+        if(stack_->currentWidget()==boardPanel_)boardReturnPage_=stack_->widget(2);
+        else stack_->setCurrentIndex(2);
     });
     connect(sess_, &Session::usersReceived, this, [this](const QJsonObject& o) {
         const auto users = o.value("users").toArray();
@@ -102,21 +117,21 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         m.ts = nowMs();
         m.kind = (m.groupId > 0) ? "group" : "direct";
         store_->addMessage(m);
-        const int peer = (m.kind == "group") ? m.groupId : m.fromId;
+        const int peer = (m.kind == "group") ? m.groupId : (m.fromId == selfId_ ? m.toId : m.fromId);
         const QString key = (m.kind == "group") ? Store::groupKey(m.groupId) : Store::directKey(peer);
         const bool grouped = groupedWith(lastMsg_.value(key, {-1, 0}), m.fromId, m.ts);
         lastMsg_[key] = {m.fromId, m.ts};
         // 板端告警：进左栏告警分节；会话里渲染成告警卡片
         const int alertLevel = isBoardAlert(m) ? alertLevelFor(m.text) : 0;
         if (alertLevel > 0) {
-            alerts_.append(AlertItem{m.fromId, m.text,
+            alerts_.append(AlertItem{peer, m.text,
                                      QDateTime::fromMSecsSinceEpoch(m.ts).toString("HH:mm"),
-                                     alertLevel});
+                                     alertLevel, m.kind == "group"});
             refreshAlerts();
         }
         const bool matches = (m.kind == "group")
                                  ? (currentIsGroup_ && m.groupId == currentPeer_)
-                                 : (!currentIsGroup_ && m.fromId == currentPeer_);
+                                 : (!currentIsGroup_ && peer == currentPeer_);
         if (matches) {
             chat_->appendMessage(m.fromId, senderName(m.fromId), m.text, m.ts, grouped, alertLevel);
         } else if (m.fromId != selfId_) {
@@ -145,18 +160,8 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
 
     connect(contacts_, &ContactsPanel::contactSelected, this, [this](int id) { openConversation(id, false); });
     connect(contacts_, &ContactsPanel::groupSelected, this, [this](int id) { openConversation(id, true); });
-    connect(contacts_, &ContactsPanel::alertSelected, this, [this](int id) { openConversation(id, false); });
-    connect(contacts_, &ContactsPanel::boardConfigRequested, this, [this] {
-        bool ok = false;
-        const int v = QInputDialog::getInt(
-            this, "板端账号",
-            "板端账号的数字 id（Console 桥用哪个 LanChat 账号发告警就填哪个；0 = 关闭归类）：",
-            boardId_, 0, 1000000, 1, &ok);
-        if (!ok) return;
-        boardId_ = v;
-        QSettings().setValue("board_account_id", v);
-        refreshAlerts();
-    });
+    connect(contacts_, &ContactsPanel::alertSelected, this, [this](int id, bool group) { openConversation(id, group); });
+    connect(contacts_, &ContactsPanel::boardConfigRequested, this, &MainWindow::showBoardConnection);
     connect(contacts_, &ContactsPanel::createGroupRequested, this, [this] {
         bool ok = false;
         const QString name = QInputDialog::getText(this, "建群", "群名称：", QLineEdit::Normal, "", &ok);
@@ -169,17 +174,10 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     });
     connect(chat_, &ChatView::sendRequested, this, [this](const QString& t) {
         if (currentPeer_ <= 0) return;
-        const qint64 ts = nowMs();
+        // The server echoes both direct and group messages to their sender.
+        // Store and render that reply through messageReceived exactly once.
         if (currentIsGroup_) sess_->sendGroup(currentPeer_, t);
         else sess_->sendPrivate(currentPeer_, t);
-        Message m{selfId_, currentIsGroup_ ? 0 : currentPeer_,
-                  currentIsGroup_ ? currentPeer_ : 0, t, ts,
-                  currentIsGroup_ ? "group" : "direct"};
-        store_->addMessage(m);
-        const QString key = currentIsGroup_ ? Store::groupKey(currentPeer_) : Store::directKey(currentPeer_);
-        const bool grouped = groupedWith(lastMsg_.value(key, {-1, 0}), selfId_, ts);
-        lastMsg_[key] = {selfId_, ts};
-        chat_->appendMessage(selfId_, "我", t, ts, grouped);
     });
 
     auto* sc = new QShortcut(QKeySequence("Ctrl+Shift+D"), this);
@@ -217,6 +215,14 @@ void MainWindow::buildTitleBar()
     title->setObjectName("headerTitle");
     lay->addWidget(title);
     lay->addStretch(1);
+    auto* board = new QPushButton("板端连接", titleBar_);
+    board->setObjectName("boardConnectionButton");
+    connect(board, &QPushButton::clicked, this, &MainWindow::showBoardConnection);
+    connect(bridge_, &BoardConnection::changed, board, [this, board] {
+        board->setText(bridge_->snapshot().value("board_connected").toBool() ? "板端连接 · 已连接" : "板端连接");
+        board->setToolTip(bridge_->state());
+    });
+    lay->addWidget(board);
     auto* min = new QPushButton("—", titleBar_);
     auto* max = new QPushButton("□", titleBar_);
     auto* close = new QPushButton("×", titleBar_);
@@ -290,7 +296,21 @@ void MainWindow::refreshAlerts()
 
 bool MainWindow::isBoardAlert(const Message& m) const
 {
-    return boardId_ > 0 && m.kind == "direct" && m.fromId == boardId_;
+    return boardId_ > 0 && (m.kind == "direct" || m.kind == "group") && m.fromId == boardId_;
+}
+
+void MainWindow::showBoardConnection()
+{
+    // One persistent page keeps the draft, pending delivery and scroll position intact.
+    if(!boardPanel_){
+        boardPanel_=new BoardConnectionPanel(bridge_,stack_,sess_);
+        stack_->addWidget(boardPanel_);
+        connect(boardPanel_,&BoardConnectionPanel::returnRequested,this,[this]{
+            stack_->setCurrentWidget(boardReturnPage_?boardReturnPage_:static_cast<QWidget*>(login_));
+        });
+    }
+    if(stack_->currentWidget()!=boardPanel_)boardReturnPage_=stack_->currentWidget();
+    stack_->setCurrentWidget(boardPanel_);
 }
 
 int MainWindow::alertLevelFor(const QString& text) const

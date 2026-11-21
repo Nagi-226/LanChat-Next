@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QString>
+#include <QByteArray>
 
 namespace credentials {
 
@@ -20,5 +21,8 @@ SavedLogin load();
 void save(const QString& username, const QString& password);
 // 取消勾选时调用：把记住的内容清掉
 void clear();
+// 独立模块使用相同 DPAPI 保护，返回/接收 base64 密文；非 Windows 不落密码。
+QByteArray encryptSecret(const QString& password);
+QString decryptSecret(const QByteArray& encoded);
 
 } // namespace credentials

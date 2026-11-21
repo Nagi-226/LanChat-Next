@@ -27,6 +27,7 @@ struct AlertItem {
     QString text;
     QString time;
     int level = 1;
+    bool isGroup = false;
 };
 
 class ContactsPanel : public QWidget {
@@ -45,7 +46,7 @@ protected:
 signals:
     void contactSelected(int id);
     void groupSelected(int id);
-    void alertSelected(int peerId);
+    void alertSelected(int peerId, bool isGroup);
     void boardConfigRequested();
     void createGroupRequested();
     void joinGroupRequested();

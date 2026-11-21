@@ -3,5 +3,10 @@
 
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set ws = CreateObject("Wscript.Shell")
-ws.CurrentDirectory = fso.GetParentFolderName(WScript.ScriptFullName)
-ws.Run "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File ""scripts\launch.ps1""", 0, True
+exe = ws.ExpandEnvironmentStrings("%LOCALAPPDATA%\LanChat-Qt\lanchat_qt.exe")
+If Not fso.FileExists(exe) Then
+  MsgBox "Please deploy the Qt client using scripts\deploy-qt.ps1 first.", 48, "LanChat-Next"
+  WScript.Quit 1
+End If
+ws.CurrentDirectory = fso.GetParentFolderName(exe)
+ws.Run """" & exe & """", 1, False

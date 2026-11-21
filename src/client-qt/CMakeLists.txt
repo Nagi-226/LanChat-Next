@@ -143,6 +143,7 @@ add_executable(lanchat_qt WIN32
     src/app/devmode.cpp
     src/app/credentials.cpp
     src/app/server_process.cpp
+    src/app/board_connection.cpp
     src/ui/theme.cpp
     src/ui/avatar.cpp
     src/ui/login_view.cpp
@@ -151,6 +152,7 @@ add_executable(lanchat_qt WIN32
     src/ui/contacts_panel.cpp
     src/ui/members_panel.cpp
     src/ui/main_window.cpp
+    src/ui/board_connection_panel.cpp
     resources/resources.qrc
     ${LANCHAT_WIN_RESOURCES}
 )
@@ -160,3 +162,45 @@ if(WIN32)
     # DPAPI（CryptProtectData）在 crypt32：记住账户的密码加密靠它
     target_link_libraries(lanchat_qt PRIVATE crypt32)
 endif()
+
+add_executable(lanchat_qt_test_board_connection
+    tests/test_board_connection.cpp src/app/board_connection.cpp src/app/credentials.cpp
+    src/net/frame_buffer.cpp src/protocol/messages.cpp)
+target_include_directories(lanchat_qt_test_board_connection PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_board_connection PRIVATE Qt6::Core Qt6::Network)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_board_connection PRIVATE crypt32)
+endif()
+add_test(NAME board_connection COMMAND lanchat_qt_test_board_connection)
+get_target_property(_client_sources lanchat_qt SOURCES)
+list(REMOVE_ITEM _client_sources src/main.cpp ${LANCHAT_WIN_RESOURCES})
+add_executable(lanchat_qt_test_board_alerts tests/test_board_alerts.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_board_alerts PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_board_alerts PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_board_alerts PRIVATE crypt32)
+endif()
+add_test(NAME board_alerts COMMAND lanchat_qt_test_board_alerts)
+set_tests_properties(board_connection board_alerts PROPERTIES
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
+set_tests_properties(board_alerts PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(lanchat_qt_test_board_display tests/test_board_display.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_board_display PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_board_display PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_board_display PRIVATE crypt32)
+endif()
+add_test(NAME board_display COMMAND lanchat_qt_test_board_display)
+set_tests_properties(board_display PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
+
+add_executable(lanchat_qt_test_message_echo tests/test_message_echo.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_message_echo PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_message_echo PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_message_echo PRIVATE crypt32)
+endif()
+add_test(NAME message_echo COMMAND lanchat_qt_test_message_echo)
+set_tests_properties(message_echo PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")

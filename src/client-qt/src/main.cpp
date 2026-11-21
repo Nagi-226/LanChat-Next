@@ -40,6 +40,8 @@ int main(int argc, char** argv)
             w.loadDemoData(true, true);
         } else if (qstrcmp(argv[i], "--demo-empty") == 0) {
             w.loadDemoData(false);
+        } else if (qstrcmp(argv[i], "--board-connection") == 0) {
+            QTimer::singleShot(50, &w, &MainWindow::showBoardConnection);
         } else if (qstrcmp(argv[i], "--width") == 0 && i + 1 < argc) {
             w.resize(QString::fromLocal8Bit(argv[i + 1]).toInt(), 800);
         } else if (qstrcmp(argv[i], "--grab") == 0 && i + 1 < argc) {

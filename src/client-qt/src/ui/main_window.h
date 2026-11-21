@@ -15,6 +15,8 @@
 class Session;
 class Store;
 class DevMode;
+class BoardConnection;
+class BoardConnectionPanel;
 class QStackedWidget;
 class QLabel;
 class QPushButton;
@@ -31,6 +33,7 @@ public:
     // UI 预览 hook：注入演示数据并直跳主界面（供 --demo 截图，不联网）
     // openBoard=true 时打开板端会话，供告警卡片目检
     void loadDemoData(bool withMessages = true, bool openBoard = false);
+    void showBoardConnection();
 
 protected:
     void mousePressEvent(QMouseEvent* e) override;
@@ -46,13 +49,16 @@ private:
     void openConversation(int id, bool isGroup);
     QString senderName(int id) const;
     void refreshAlerts();
-    // 板端告警判定：发送者==配置的板端账号 且为私聊；级别从正文 drowsy_level=N 解析
+    // 板端告警判定：发送者==配置的板端账号，支持私聊及群；级别从正文解析
     bool isBoardAlert(const Message& m) const;
     int alertLevelFor(const QString& text) const;
 
     Session* sess_;
     Store* store_;
     DevMode* dev_;
+    BoardConnection* bridge_;
+    BoardConnectionPanel* boardPanel_=nullptr;
+    QWidget* boardReturnPage_=nullptr;
     QStackedWidget* stack_;
     LoginView* login_;
     RegisterView* reg_;

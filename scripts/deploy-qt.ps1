@@ -34,6 +34,7 @@
 param(
   [switch]$SkipBuild,
   [string]$QtDir = '',
+  [string]$ConsoleRoot = '',
   [switch]$SkipShortcut
 )
 
@@ -42,6 +43,7 @@ $root      = Split-Path -Parent $PSScriptRoot
 $clientDir = Join-Path $root 'src\client-qt'
 $buildDir  = Join-Path $root 'build-qt'
 $deployDir = Join-Path $env:LOCALAPPDATA 'LanChat-Qt'
+if (-not $ConsoleRoot) { $ConsoleRoot = Join-Path (Split-Path -Parent $root) 'RoboMind-Console' }
 
 function Step($msg) { Write-Host "[DEPLOY] $msg" -ForegroundColor Cyan }
 function Fail($msg) { Write-Host "[FAIL] $msg" -ForegroundColor Red; exit 1 }
@@ -73,6 +75,12 @@ if (-not $SkipBuild) {
   Step 'cmake build ...'
   & cmake --build $buildDir -j 8
   if ($LASTEXITCODE -ne 0) { Fail 'cmake build 失败' }
+  Step '构建 Console 桥 ...'
+  $vvosRoot = Join-Path (Split-Path -Parent $ConsoleRoot) 'Virtual-Vehicle-OS'
+  & cmake -S $ConsoleRoot -B (Join-Path $ConsoleRoot 'build') -G Ninja "-DCMAKE_PREFIX_PATH=$QtDir" "-DVVOS_ROOT=$vvosRoot"
+  if ($LASTEXITCODE -ne 0) { Fail 'Console configure 失败' }
+  & cmake --build (Join-Path $ConsoleRoot 'build') --target robomind-console deploy
+  if ($LASTEXITCODE -ne 0) { Fail 'Console 构建/部署失败' }
 }
 
 $srcExe = Join-Path $buildDir 'lanchat_qt.exe'
@@ -85,6 +93,19 @@ $dstExe = Join-Path $deployDir 'lanchat_qt.exe'
 if (Test-Path $dstExe) { Copy-Item $dstExe "$dstExe.bak" -Force }
 Copy-Item $srcExe $dstExe -Force
 Step "已复制 lanchat_qt.exe -> $deployDir"
+
+$consoleDist = Join-Path $ConsoleRoot 'build\dist'
+if (-not (Test-Path -LiteralPath (Join-Path $consoleDist 'RoboMindConsole.exe'))) {
+  Fail "缺少 Console 桥产物：$consoleDist"
+}
+$consoleDeploy = Join-Path $deployDir 'robomind-console'
+New-Item -ItemType Directory -Force -Path $consoleDeploy | Out-Null
+Get-ChildItem -LiteralPath $consoleDist | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination $consoleDeploy -Recurse -Force
+}
+Step "已部署 Console 桥及依赖 -> $consoleDeploy"
+$roundedIcon = Join-Path $deployDir 'lanchat-rounded-v2.ico'
+Copy-Item -LiteralPath (Join-Path $clientDir 'resources\icons\lanchat.ico') -Destination $roundedIcon -Force
 
 # 服务端：桌面快捷方式只启动客户端，服务端由客户端 sidecar 拉起，所以要放在同目录
 #
@@ -121,6 +142,7 @@ if (-not $SkipShortcut) {
   $desktopDirs = @(
     [Environment]::GetFolderPath('Desktop'),
     (Join-Path $env:USERPROFILE 'Desktop')
+    [Environment]::GetFolderPath('CommonDesktopDirectory')
   ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
   $sh = New-Object -ComObject WScript.Shell
@@ -132,8 +154,8 @@ if (-not $SkipShortcut) {
     $sc = $sh.CreateShortcut($lnk)
     $sc.TargetPath       = $dstExe
     $sc.WorkingDirectory = $deployDir
-    $sc.Description      = 'LanChat-Next (Qt6 native client)'
-    $sc.IconLocation     = "$dstExe,0"
+    $sc.Description      = 'LanChat-Next · Qt6 原生客户端与板端连接'
+    $sc.IconLocation     = "$roundedIcon,0"
     $sc.Save()
     Step ("桌面快捷方式已{0}：{1}" -f $(if ($isNew) { '创建' } else { '更新' }), $lnk)
   }
