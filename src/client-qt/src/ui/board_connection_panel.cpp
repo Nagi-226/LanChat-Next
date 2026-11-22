@@ -46,7 +46,8 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     auto* title = new QLabel("板端连接", this);
     title->setStyleSheet("font-size:22px;font-weight:600;color:#E7EAF0;background:transparent;");
     layout->addWidget(title);
-    auto* description = new QLabel("板端状态与告警上行 · 本机消息下行显示\n电脑可用 5GHz，板子用同一路由器的 2.4GHz。", this);
+    auto* description = new QLabel("板端状态与告警上行 · 本机消息下行显示\n电脑可用 5GHz，板子用同一路由器的 2.4GHz。\n私聊板端账号：感知 / 链路 / 设备 / 帮助；群聊使用 /感知 等命令。回复显示在聊天会话中。", this);
+    description->setWordWrap(true);
     description->setStyleSheet("color:#8A94A4;background:transparent;");
     layout->addWidget(description);
     status_ = new QLabel(this);

@@ -1,4 +1,4 @@
-param([string]$DeploymentDirectory=(Join-Path $env:LOCALAPPDATA 'LanChat-Qt'),
+﻿param([string]$DeploymentDirectory=(Join-Path $env:LOCALAPPDATA 'LanChat-Qt'),
       [string]$OutputDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) 'build\lan-distribution'))
 $ErrorActionPreference='Stop'
 if(-not (Test-Path -LiteralPath (Join-Path $DeploymentDirectory 'lanchat_qt.exe'))){throw 'Deploy the application first'}
@@ -21,6 +21,8 @@ if(Test-Path -LiteralPath $consoleSource){
     }
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start-lan-host.ps1') -Destination $bundle
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'check-tailscale.ps1') -Destination $bundle
+Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'docs\tailscale-setup.md') -Destination (Join-Path $bundle 'Tailscale-使用说明.md')
 Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'docs\lan-deployment.md') -Destination (Join-Path $bundle 'LAN-使用说明.md')
 @'
 $ErrorActionPreference='Stop'

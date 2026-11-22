@@ -138,6 +138,12 @@ Step 'windeployqt ...'
 & (Join-Path $QtDir 'bin\windeployqt.exe') --no-translations --no-system-d3d-compiler --no-opengl-sw $dstExe | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'windeployqt 失败' }
 
+# 把使用说明和检查入口放在安装目录，用户无需回到源码仓库运行。
+foreach ($helper in @('start-lan-host.ps1', 'check-tailscale.ps1')) {
+  Copy-Item -LiteralPath (Join-Path $PSScriptRoot $helper) -Destination $deployDir -Force
+}
+Copy-Item -LiteralPath (Join-Path $root 'docs\tailscale-setup.md') -Destination (Join-Path $deployDir 'Tailscale-使用说明.md') -Force
+
 # ── 5. 桌面快捷方式 ──────────────────────────────────────────────
 # 桌面可能被 OneDrive 重定向，实际存在两处：
 #   [Environment]::GetFolderPath('Desktop')  → 通常是 OneDrive\桌面（真桌面）
