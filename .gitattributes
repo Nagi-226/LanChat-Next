@@ -1,1 +1,6 @@
 * text=auto
+
+# Preserve upstream installer resources and license texts without line-ending edits.
+scripts/installer/ChineseSimplified.isl -text -whitespace
+scripts/installer/third-party/*.txt -text -whitespace
+scripts/installer/third-party/NOTICE.txt whitespace

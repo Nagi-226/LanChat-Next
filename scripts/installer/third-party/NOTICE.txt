@@ -1,0 +1,27 @@
+LanChat-Next Windows distribution - third-party notices
+
+Qt 6.10.3
+Copyright The Qt Company Ltd. and other contributors.
+Qt libraries are distributed as separate DLLs, under LGPL version 3 where applicable.
+The LGPL and GPL texts and Qt exception are included here; module-specific terms
+and notices remain available in the matching source distribution.
+Matching source: https://download.qt.io/archive/qt/6.10/6.10.3/single/
+Qt licensing: https://www.qt.io/licensing/open-source-lgpl-obligations
+Users can replace these dynamically linked libraries with compatible builds.
+
+MinGW GCC runtime
+The GCC runtime libraries use their applicable GPL terms with the GCC Runtime
+Library Exception. The GPL and runtime exception texts are included here.
+Source: https://gcc.gnu.org/releases.html
+MinGW-w64: https://www.mingw-w64.org/
+
+Inno Setup 6.7.3
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2026 Martijn Laan. All rights reserved.
+The Inno Setup license is included here.
+Installer source and the Chinese translation were taken from:
+https://github.com/jrsoftware/issrc/tree/is-6_7_3
+
+Additional runtime DLLs supplied by the Qt Windows deployment tools retain
+their original authors' notices and licenses. No license for the LanChat-Next
+project itself is granted or changed by this notice.

@@ -2,7 +2,7 @@
 
 面向可信公司局域网的桌面聊天应用，采用 **C++17 / Asio 服务端 + Qt6 Widgets 原生客户端**。在 RoboMind 系列中，同时提供告警送达和板端消息显示入口。
 
-> 当前状态：2026-11-21。Qt 原生客户端已取代 Tauri；本轮已落地共享主机、群管理、历史同步和 PC 附件传输；普通 Unicode 表情作为文字发送。下表按当前 Qt 实现记录，旧客户端的功能不自动视为已经迁移。
+> 当前状态：2026-11-22。Qt 原生客户端已取代 Tauri；共享主机、群管理、历史同步、PC 附件与四项设备查询已落地；普通 Unicode 表情作为文字发送。下表按当前 Qt 实现记录，旧客户端的功能不自动视为已经迁移。
 
 ## 当前能力
 
@@ -50,7 +50,9 @@ flowchart LR
 
 附件支持按钮选择、拖拽、剪贴板图片；接收后可预览图片/GIF、另存文件。默认单文件 100 MiB，服务器配额 5 GiB，客户端完整附件缓存约 512 MiB。暂停或断线后点击 **继续**，重启后未完成任务仍保留。
 
-公司常开主机、Windows 防火墙、安装 ZIP、备份和限额：[局域网部署说明](docs/lan-deployment.md)。公司主机可独立后台运行，关闭聊天窗口后继续服务其他用户。
+Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.22-x64.exe`** 双击安装，随包带齐运行库，创建桌面 / 开始菜单入口并支持卸载。测试者安装后在 **服务器 → 连接公司局域网主机** 填同一主机地址和端口 `12346`，再注册、登录并凭群 ID 加入。跨网络测试先取得 Tailscale 组网访问权限。
+
+公司常开主机、Windows 防火墙、安装包 / ZIP、备份和限额：[局域网部署说明](docs/lan-deployment.md)。公司主机可独立后台运行，关闭聊天窗口后继续服务其他用户。
 
 ### 板端连接
 
@@ -92,6 +94,20 @@ ctest --test-dir build-qt --output-on-failure
 ```
 
 正式目录为 `%LOCALAPPDATA%\LanChat-Qt\`。桌面快捷方式、`launch.bat` 和 `launch.vbs` 均启动此目录中的 `lanchat_qt.exe`；Console 桥位于 `robomind-console/` 子目录。图标四角白底已透明化，保留圆滑外形。
+
+### Windows 安装包
+
+先生成经过核对的 ZIP / 分发目录，再用 Inno Setup 6 编译单文件安装器：
+
+```powershell
+winget install --id JRSoftware.InnoSetup --exact --source winget
+.\scripts\package-lan.ps1 -OutputDirectory build/lan-distribution-20261122
+.\scripts\package-installer.ps1 -BundleDirectory build/lan-distribution-20261122/LanChat-Next
+```
+
+输出在 `build/windows-installer-20261122/`。接收者只需运行安装 `.exe`，无需 Qt、Python、Node 或 PowerShell 安装脚本；Tailscale 按联网方式单独安装。安装器按当前用户安装，保留升级 / 卸载后的个人设置和数据；附中文联机说明与第三方运行库许可文本。
+
+2026-11-22 安装验收通过：`scripts/test-windows-installer.ps1` 使用实际安装器和独立目录，核对 59 个文件、快捷方式、安装目录中的 Qt / 服务端双客户端 LAN 测试、重复安装、卸载及个人文件保留。测试探针另需 `-TestClientPath` 与 `-QtTestDllPath`，QtTest 不随正式安装器分发；已注册该安装器或已有开始菜单组的用户需要换一个干净 Windows 用户运行验收脚本。两个物理 PC 的联机验收仍待测试者配合。
 
 ### 服务端
 

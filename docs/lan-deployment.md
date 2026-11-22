@@ -1,6 +1,6 @@
 # 公司局域网使用说明
 
-2026-11-21，Windows / Qt6 初版。
+2026-11-22，Windows / Qt6 初版，增加可双击安装的 Windows 10/11 x64 安装器。
 
 ## 1. 选定一台常开 PC
 
@@ -27,9 +27,13 @@ New-NetFirewallRule -DisplayName 'LanChat LAN 12346' -Direction Inbound -Action 
 
 ## 2. 分发客户端
 
-维护者完成 `scripts/deploy-qt.ps1` 后，可运行 `scripts/package-lan.ps1` 生成 Windows ZIP。包包含客户端、服务端、Qt 运行库、可选板端桥及安装脚本，排除账号、数据库和日志。
+推荐向测试者发送 **`LanChat-Next-Setup-2026.11.22-x64.exe`**。双击按向导安装到当前用户目录，默认创建桌面和开始菜单入口；通常无需管理员权限，运行库已随包提供。开始菜单中提供联机使用说明和卸载入口，Windows「已安装的应用」中也可卸载。升级 / 卸载保留个人设置和数据。
 
-员工解压 ZIP，运行里面的 `install.ps1`；安装到当前用户 `%LOCALAPPDATA%\LanChat-Qt` 并创建桌面快捷方式，通常不需要管理员权限。启动后点击 **服务器 → 连接公司局域网主机**，填写主机 IPv4 或可解析的主机名及端口，然后 **保存并重新连接**。
+启动后点击 **服务器 → 连接公司局域网主机**，填写测试发起者的主机 IPv4 或可解析的主机名及端口 `12346`，然后 **保存并重新连接**。同一 LAN 使用该 LAN 的主机地址，异地使用取得组网权限后的 Tailscale 地址；每个测试者连接同一消息主机。
+
+维护者完成 `scripts/deploy-qt.ps1` 后，可运行 `scripts/package-lan.ps1` 生成 ZIP / 分发目录，再用 `scripts/package-installer.ps1 -BundleDirectory <分发目录>` 编译安装器，需要 Inno Setup 6。二进制允许清单包含客户端、服务端、Qt 运行库与板端桥；拒绝混入账号、数据库和日志。输出包含逐文件哈希清单。
+
+ZIP 仍可使用：解压后运行 `install.ps1`，安装到 `%LOCALAPPDATA%\LanChat-Qt` 并创建桌面快捷方式。普通聊天和附件不要求测试者拥有 ESP32-S3。
 
 远程模式不会启动本机服务端。不同服务器的账号、群和历史相互独立；切换服务器会清空当前会话视图并重新登录。
 
