@@ -105,6 +105,25 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     executableRow->addWidget(consolePath_, 1);
     executableRow->addWidget(browse);
     layout->addLayout(executableRow);
+    auto* aiTitle = new QLabel("AI 状态问答",this);
+    aiTitle->setStyleSheet("font-size:16px;font-weight:600;color:#E7EDF7;background:transparent;");
+    layout->addWidget(aiTitle);
+    aiEnabled_=new QCheckBox("启用文字自由问答",this);aiEnabled_->setObjectName("boardAiEnabled");aiEnabled_->setChecked(config.aiEnabled);
+    layout->addWidget(aiEnabled_);
+    auto* aiForm=new QFormLayout;aiForm->setVerticalSpacing(10);
+    aiProvider_=new QComboBox(this);aiProvider_->setObjectName("boardAiProvider");
+    aiProvider_->addItem("Anthropic 兼容（含 DeepSeek）","anthropic");aiProvider_->addItem("OpenAI 兼容","openai");
+    aiProvider_->setCurrentIndex(config.aiProvider=="openai"?1:0);
+    aiEndpoint_=new QLineEdit(config.aiEndpoint,this);aiEndpoint_->setObjectName("boardAiEndpoint");aiEndpoint_->setPlaceholderText("例如 https://api.deepseek.com/anthropic");
+    aiModel_=new QLineEdit(config.aiModel,this);aiModel_->setObjectName("boardAiModel");aiModel_->setPlaceholderText("服务商提供的模型名称");
+    aiKey_=new QLineEdit(this);aiKey_->setObjectName("boardAiKey");aiKey_->setEchoMode(QLineEdit::Password);
+    aiKey_->setPlaceholderText(config.aiKey.isEmpty()?"输入 API 密钥":"密钥已加密保存，留空保留");
+    aiForm->addRow("接口协议",aiProvider_);aiForm->addRow("接口地址",aiEndpoint_);aiForm->addRow("模型",aiModel_);aiForm->addRow("API 密钥",aiKey_);layout->addLayout(aiForm);
+    auto* aiHint=new QLabel("私聊专用板端账号可直接提问，例如「现在没检测到人是什么原因？」；群聊用 /AI 问题。\n每次刷新感知、链路和设备状态，不上传图像或完整日志。模型上下文最多三轮，仅留内存，10 分钟无活动清空；聊天记录按 LanChat 保存。模型服务可能计费。",this);
+    aiHint->setWordWrap(true);aiHint->setStyleSheet("color:#8A94A4;background:transparent;");layout->addWidget(aiHint);
+    aiState_=new QLabel(this);aiState_->setObjectName("boardAiState");aiState_->setWordWrap(true);layout->addWidget(aiState_);
+    auto* aiChat=new QPushButton("在聊天中询问板端状态",this);aiChat->setObjectName("boardAiChat");layout->addWidget(aiChat);
+    connect(aiChat,&QPushButton::clicked,this,[this]{if(bridge_->config().accountId>0)emit aiChatRequested(bridge_->config().accountId);});
     auto* messageTitle = new QLabel("发送到板端屏幕", this);
     layout->addWidget(messageTitle);
     message_ = new QPlainTextEdit(this);
@@ -182,7 +201,11 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
         config.groupId = group_->value();
         config.autoStart = automatic_->isChecked();
         config.consolePath = consolePath_->text();
+        config.aiEnabled=aiEnabled_->isChecked();config.aiProvider=aiProvider_->currentData().toString();
+        config.aiEndpoint=aiEndpoint_->text().trimmed();config.aiModel=aiModel_->text().trimmed();
+        if(!aiKey_->text().isEmpty())config.aiKey=aiKey_->text().trimmed();
         bridge_->configure(config);
+        aiKey_->clear();aiKey_->setPlaceholderText(config.aiKey.isEmpty()?"输入 API 密钥":"密钥已加密保存，留空保留");
         bridge_->start();
     });
     connect(stop, &QPushButton::clicked, bridge_, &BoardConnection::stop);
@@ -198,6 +221,10 @@ void BoardConnectionPanel::refresh()
 {
     status_->setText(bridge_->state());
     const auto data = bridge_->snapshot();
+    const auto ai=data.value("ai").toObject();
+    aiState_->setText(ai.isEmpty()?"等待 AI 桥状态":!ai.value("enabled").toBool()?"AI 未启用":!ai.value("configured").toBool()?"AI 配置不完整":QString("AI 已就绪 · %1 · %2 个问题处理中 · 已回答 %3 次 / 失败 %4 次")
+        .arg(ai.value("model").toString()).arg(ai.value("pending").toInt()).arg(ai.value("replied").toInteger()).arg(ai.value("failed").toInteger()));
+    findChild<QPushButton*>("boardAiChat")->setEnabled(bridge_->config().accountId>0);
     QStringList addresses;
     for (const auto& address : QNetworkInterface::allAddresses()) {
         if (address.protocol() == QAbstractSocket::IPv4Protocol && !address.isLoopback()

@@ -7,12 +7,15 @@
 #ifndef ReleaseVersion
   #define ReleaseVersion "2026.11.23"
 #endif
+#ifndef FileVersion
+  #define FileVersion ReleaseVersion + ".0"
+#endif
 
 [Setup]
 AppId={{8AA962BF-0263-4A45-9EA1-89D1DAFF07F1}
 AppName=LanChat-Next
 AppVersion={#ReleaseVersion}
-VersionInfoVersion={#ReleaseVersion}.0
+VersionInfoVersion={#FileVersion}
 VersionInfoProductName=LanChat-Next
 VersionInfoDescription=LanChat-Next Windows installer
 AppPublisher=Nagi-226

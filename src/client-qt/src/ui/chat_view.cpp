@@ -30,6 +30,39 @@
 #include <QUuid>
 #include <QMessageBox>
 #include <QSaveFile>
+#include <QResizeEvent>
+
+namespace {
+// Nested layouts can estimate a limited-width label at its parent's wider size.
+// Measure again at the actual painted width so the last lines are not clipped.
+class MessageText : public QLabel {
+public:
+    MessageText(const QString& text,QWidget* parent):QLabel(text,parent) {
+        setTextFormat(Qt::PlainText);setWordWrap(true);
+        setTextInteractionFlags(Qt::TextSelectableByMouse);
+        setAlignment(Qt::AlignLeft|Qt::AlignTop);
+        setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Fixed);
+    }
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        QLabel::resizeEvent(event);
+        if(event->size().width()!=event->oldSize().width())measureHeight();
+    }
+    void changeEvent(QEvent* event) override {
+        QLabel::changeEvent(event);
+        if(event->type()==QEvent::FontChange||event->type()==QEvent::StyleChange)measureHeight();
+    }
+private:
+    void measureHeight() {
+        if(measuring_)return;measuring_=true;
+        // Clear the previous constraint first so widening can also reduce height.
+        setMinimumHeight(0);setMaximumHeight(QWIDGETSIZE_MAX);
+        setFixedHeight(QLabel::heightForWidth(qMax(1,width())));updateGeometry();
+        measuring_=false;
+    }
+    bool measuring_=false;
+};
+}
 
 ChatView::ChatView(QWidget* parent) : QWidget(parent)
 {
@@ -62,6 +95,7 @@ ChatView::ChatView(QWidget* parent) : QWidget(parent)
 
     // 消息区（可滚动）
     scroll_ = new QScrollArea(this);
+    scroll_->setObjectName("chatMessagesScroll");
     scroll_->setWidgetResizable(true);
     scroll_->setFrameShape(QFrame::NoFrame);
     msgBody_ = new QWidget;
@@ -172,7 +206,7 @@ void ChatView::appendMessage(int fromId, const QString& senderName, const QStrin
         head->addWidget(src);
         head->addStretch(1);
         cl->addLayout(head);
-        auto* body = new QLabel(text, card);
+        auto* body = new MessageText(text, card);
         body->setObjectName("alertBody");body->setTextFormat(Qt::PlainText);
         body->setWordWrap(true);
         cl->addWidget(body);
@@ -180,7 +214,7 @@ void ChatView::appendMessage(int fromId, const QString& senderName, const QStrin
         h->addLayout(col, 1);
         if (mine) col->setAlignment(card, Qt::AlignRight);
     } else {
-        auto* bubble = new QLabel(text, row);
+        auto* bubble = new MessageText(text, row);
         bubble->setObjectName(mine ? "bubbleSelf" : "bubblePeer");
         bubble->setTextFormat(Qt::PlainText);bubble->setTextInteractionFlags(Qt::TextSelectableByMouse);
         bubble->setWordWrap(true);
@@ -198,6 +232,8 @@ void ChatView::appendMessage(int fromId, const QString& senderName, const QStrin
     lastFrom_ = fromId;
     lastTs_ = ts;
     scroll_->verticalScrollBar()->setValue(scroll_->verticalScrollBar()->maximum());
+    // Layout/scroll limits settle after the new wrapped label gets its real width.
+    QTimer::singleShot(0,this,[this]{scroll_->verticalScrollBar()->setValue(scroll_->verticalScrollBar()->maximum());});
 }
 
 void ChatView::clear()

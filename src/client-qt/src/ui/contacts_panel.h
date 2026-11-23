@@ -1,7 +1,7 @@
 // contacts_panel.h —— 左栏 268px：品牌条 56 + 搜索 + 分节(会话/群组/板端告警) + 底部建群/加入。
 // 联系人行：34px 圆头像 + 名字(13/500) + 预览(11.5 muted) + 时间(10.5 muted) + 在线点 + 未读徽标。
 // 选中 = bg-active 浅底 + 左 3px accent 竖条（QFrame，非整条红底）。
-// 板端告警分节：Console 桥转发来的板子告警按严重度着色，点行跳到对应会话；齿轮配置板端账号。
+// 板端告警按严重度着色，点行打开会话；底部齿轮统一打开登录后的设置。
 #pragma once
 
 #include <QWidget>
@@ -12,6 +12,7 @@
 class QListWidget;
 class QLineEdit;
 class QVBoxLayout;
+class QPushButton;
 
 struct ContactItem {
     int id = 0;
@@ -40,6 +41,7 @@ public:
     void setAlerts(const QList<AlertItem>& items);
     void setSelected(int id,bool group=false);
     void setHovered(int id); // 预览 hook：强制 hover 态供状态对照截图
+    void setAuthenticated(bool authenticated);
 
 protected:
     bool eventFilter(QObject* obj, QEvent* e) override;
@@ -48,7 +50,7 @@ signals:
     void contactSelected(int id);
     void groupSelected(int id);
     void alertSelected(int peerId, bool isGroup);
-    void boardConfigRequested();
+    void settingsRequested();
     void createGroupRequested();
     void joinGroupRequested();
     void filterChanged(const QString& text);
@@ -59,6 +61,7 @@ private:
     QVBoxLayout* groupLay_;
     QVBoxLayout* alertLay_;
     QLineEdit* filter_;
+    QPushButton* settingsButton_;
     int selectedId_ = -1;
     bool selectedGroup_=false;
     QList<QPair<int, QWidget*>> rows_;

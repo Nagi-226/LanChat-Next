@@ -23,6 +23,11 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
     cfg_.autoStart = s.value("board_bridge/auto_start", false).toBool();
     cfg_.logEnabled = s.value("board_bridge/log_enabled",false).toBool();
     cfg_.logPort = s.value("board_bridge/log_port","COM3").toString();
+    cfg_.aiEnabled = s.value("board_ai/enabled",false).toBool();
+    cfg_.aiProvider = s.value("board_ai/provider","anthropic").toString();
+    cfg_.aiEndpoint = s.value("board_ai/endpoint",QString()).toString();
+    cfg_.aiModel = s.value("board_ai/model",QString()).toString();
+    cfg_.aiKey = credentials::decryptSecret(s.value("board_ai/secret").toByteArray());
     cfg_.listenPort = static_cast<quint16>(s.value("board_bridge/listen_port", 9000).toUInt());
     cfg_.serverHost = s.value("board_bridge/server_host", "127.0.0.1").toString();
     cfg_.serverPort = static_cast<quint16>(s.value("board_bridge/server_port", 12346).toUInt());
@@ -84,6 +89,11 @@ void BoardConnection::saveConfig()
     s.setValue("board_bridge/auto_start", cfg_.autoStart);
     s.setValue("board_bridge/log_enabled",cfg_.logEnabled);
     s.setValue("board_bridge/log_port",cfg_.logPort);
+    s.setValue("board_ai/enabled",cfg_.aiEnabled);
+    s.setValue("board_ai/provider",cfg_.aiProvider);
+    s.setValue("board_ai/endpoint",cfg_.aiEndpoint);
+    s.setValue("board_ai/model",cfg_.aiModel);
+    s.setValue("board_ai/secret",credentials::encryptSecret(cfg_.aiKey));
     s.setValue("board_bridge/listen_port", cfg_.listenPort);
     s.setValue("board_bridge/server_host", cfg_.serverHost);
     s.setValue("board_bridge/server_port", cfg_.serverPort);
@@ -160,6 +170,11 @@ void BoardConnection::launchConsole()
     auto env = QProcessEnvironment::systemEnvironment();
     env.insert("ROBOMIND_LANCHAT_USER_ID", QString::number(cfg_.accountId));
     env.insert("ROBOMIND_LANCHAT_PASSWORD", cfg_.password);
+    env.insert("ROBOMIND_AI_ENABLED",cfg_.aiEnabled?"1":"0");
+    env.insert("ROBOMIND_AI_PROVIDER",cfg_.aiProvider);
+    env.insert("ROBOMIND_AI_ENDPOINT",cfg_.aiEndpoint);
+    env.insert("ROBOMIND_AI_MODEL",cfg_.aiModel);
+    env.insert("ROBOMIND_AI_KEY",cfg_.aiKey);
     proc_.setProcessEnvironment(env);
     proc_.setWorkingDirectory(profileDir_);
     QStringList arguments={"--bridge", "--port", QString::number(cfg_.listenPort),

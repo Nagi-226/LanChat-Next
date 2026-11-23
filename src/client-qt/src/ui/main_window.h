@@ -47,6 +47,10 @@ protected:
 
 private:
     void showConnectionSettings();
+    void showSettings();
+    void ensureSettingsPage();
+    bool configureLoginConnection(const QString& address);
+    void changeConnection(const QString& host,quint16 port,bool hosted,int maxAttachmentMb);
     void renderConversation();
     void renderMessage(const Message& m,bool grouped,int level);
     void refreshTransfers();
@@ -56,6 +60,7 @@ private:
     void toggleMaximized();
     void configureNativeFrame();
     void setMaximizeHover(bool hovered);
+    void setCloseHover(bool hovered);
     void buildMainPage();
     void refreshContacts();
     void refreshGroups();
@@ -76,7 +81,11 @@ private:
     DevMode* dev_;
     BoardConnection* bridge_;
     BoardConnectionPanel* boardPanel_=nullptr;
-    QWidget* boardReturnPage_=nullptr;
+    QWidget* settingsPage_=nullptr;
+    QStackedWidget* settingsStack_=nullptr;
+    QWidget* serverPage_=nullptr;
+    QPushButton* serverSettingsBtn_=nullptr;
+    QPushButton* boardSettingsBtn_=nullptr;
     QStackedWidget* stack_;
     LoginView* login_;
     RegisterView* reg_;
@@ -86,6 +95,7 @@ private:
     QWidget* titleBar_=nullptr;
     QPushButton* consoleBtn_;
     QPushButton* maximizeBtn_=nullptr;
+    QPushButton* closeBtn_=nullptr;
     quintptr nativeFrameId_=0;
     bool maximizePressed_=false;
     int selfId_ = 0;

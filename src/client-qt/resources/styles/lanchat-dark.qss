@@ -57,7 +57,7 @@ QPushButton#icon:hover { background-color: #232833; color: #E7EAF0; }
 QPushButton[windowControl="true"] { background: transparent; border: none; border-radius: 0; padding: 0; }
 QPushButton[windowControl="true"]:hover, QPushButton[windowControl="true"][nativeHover="true"] { background: #232833; }
 QPushButton[windowControl="true"]:pressed { background: #2A3040; }
-QPushButton#windowCloseButton:hover { background: #C42B1C; }
+QPushButton#windowCloseButton:hover, QPushButton#windowCloseButton[nativeHover="true"] { background: #C42B1C; }
 QPushButton#windowCloseButton:pressed { background: #A82418; }
 QPushButton[windowControl="true"]:focus { border: 1px solid #4C7DFF; }
 
@@ -148,6 +148,15 @@ QPushButton#gearBtn {
     border: none; border-radius: 4px; font-size: 12px;
 }
 QPushButton#gearBtn:hover { background-color: #232833; color: #E7EAF0; }
+QPushButton#settingsButton { background: transparent; border: none; border-radius: 8px; padding: 8px; }
+QPushButton#settingsButton:hover { background: #232833; }
+QWidget#sidebarFooter { border-top: 1px solid #272C37; }
+QWidget#settingsNavigation { background: #1D212A; border-right: 1px solid #272C37; }
+QLabel#settingsAccountLabel, QLabel#settingsHint { color: #8A94A4; font-size: 12px; }
+QPushButton[settingsNavigation="true"] { text-align: left; border: none; padding: 12px 16px; }
+QPushButton[settingsNavigation="true"]:checked { background: #1A2436; color: #7FA3FF; }
+QFrame#settingsCard { background: #1D212A; border: 1px solid #272C37; border-radius: 12px; }
+QFrame#settingsCard QLabel, QWidget#settingsNavigation QLabel { background: transparent; }
 QWidget#alertRow { background-color: transparent; border-radius: 8px; }
 QWidget#alertRow:hover { background-color: #232833; }
 QLabel#alertText { font-size: 12px; color: #E7EAF0; }

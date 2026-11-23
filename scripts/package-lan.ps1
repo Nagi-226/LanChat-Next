@@ -35,7 +35,7 @@ $shortcut.TargetPath=Join-Path $destination 'lanchat_qt.exe'
 $shortcut.WorkingDirectory=$destination
 $shortcut.IconLocation=(Join-Path $destination 'lanchat-rounded-v2.ico')+',0'
 $shortcut.Save()
-Write-Host 'Installed. Open LanChat-Next and configure the LAN host address in Server settings.'
+Write-Host 'Installed. Enter the host address on the LanChat login page, connect, then register or sign in.'
 '@ | Set-Content -LiteralPath (Join-Path $bundle 'install.ps1') -Encoding utf8
 $zip=Join-Path $OutputDirectory 'LanChat-Next-Windows-LAN.zip'
 Compress-Archive -LiteralPath $bundle -DestinationPath $zip

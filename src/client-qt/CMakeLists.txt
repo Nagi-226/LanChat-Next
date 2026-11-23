@@ -217,6 +217,14 @@ add_test(NAME message_echo COMMAND lanchat_qt_test_message_echo)
 set_tests_properties(message_echo PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
 
+add_executable(lanchat_qt_test_chat_layout tests/test_chat_layout.cpp
+    src/ui/chat_view.cpp src/ui/avatar.cpp src/ui/theme.cpp resources/resources.qrc)
+target_include_directories(lanchat_qt_test_chat_layout PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_chat_layout PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+add_test(NAME chat_layout COMMAND lanchat_qt_test_chat_layout)
+set_tests_properties(chat_layout PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
+
 add_executable(lanchat_qt_test_lan tests/test_lan_client.cpp ${_client_sources})
 target_include_directories(lanchat_qt_test_lan PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt_test_lan PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)

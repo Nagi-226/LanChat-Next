@@ -21,6 +21,8 @@
 #include <QStackedWidget>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QLineEdit>
+#include <QDir>
 
 int main(int argc, char** argv)
 {
@@ -33,19 +35,41 @@ int main(int argc, char** argv)
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
     QSettings().setValue("board_account_id", 77);
+    QSettings().setValue("board_bridge/account_id",77);
     Session session;
     Store store;
     DevMode dev;
     MainWindow window(&session, &store, &dev);
     window.show();
     auto* pages=window.findChild<QStackedWidget*>("mainPages");
-    auto* boardButton=window.findChild<QPushButton*>("boardConnectionButton");
-    assert(pages&&boardButton);
+    auto* settingsButton=window.findChild<QPushButton*>("settingsButton");
+    assert(pages&&settingsButton&&!settingsButton->isVisible()&&!settingsButton->isEnabled());
     QWidget* loginPage=pages->currentWidget();
+    const auto args=app.arguments();QString captureFolder;if(args.contains("--capture-dir")){captureFolder=args.value(args.indexOf("--capture-dir")+1);QDir().mkpath(captureFolder);QTest::qWait(50);assert(window.grab().save(captureFolder+"/login.png"));}
+    window.showBoardConnection();
+    assert(pages->currentWidget()==loginPage&&!window.findChild<BoardConnectionPanel*>()&&!window.findChild<QPushButton*>("serverSettingsButton"));
+    emit session.ready(99,"Tester");QCoreApplication::processEvents();
+    assert(settingsButton->isVisible()&&settingsButton->isEnabled());
+    assert(settingsButton->mapTo(&window,QPoint()).x()<50&&settingsButton->mapTo(&window,QPoint()).y()>window.height()-100);
+    QTest::mouseClick(settingsButton,Qt::LeftButton);
+    auto* settingsPage=window.findChild<QWidget*>("settingsPage");
+    auto* contents=window.findChild<QStackedWidget*>("settingsContents");
+    auto* boardButton=window.findChild<QPushButton*>("boardConnectionButton");
+    auto* serverButton=window.findChild<QPushButton*>("serverSettingsButton");
+    assert(settingsPage&&contents&&boardButton&&serverButton&&pages->currentWidget()==settingsPage);
+    assert(serverButton->parentWidget()!=window.findChild<QWidget*>("windowTitleBar"));
+    if(!captureFolder.isEmpty()){QTest::qWait(50);assert(window.grab().save(captureFolder+"/settings.png"));}
     QTest::mouseClick(boardButton,Qt::LeftButton);
     auto* boardPage=window.findChild<BoardConnectionPanel*>();
-    assert(boardPage&&pages->currentWidget()==boardPage&&!boardPage->isWindow()&&boardPage->window()==&window);
+    assert(boardPage&&contents->currentWidget()==boardPage&&!boardPage->isWindow()&&boardPage->window()==&window);
     assert(window.findChildren<QDialog*>().isEmpty());
+    auto* aiKey=boardPage->findChild<QLineEdit*>("boardAiKey");
+    auto* aiChat=boardPage->findChild<QPushButton*>("boardAiChat");
+    assert(aiKey&&aiKey->echoMode()==QLineEdit::Password&&aiKey->text().isEmpty()&&aiChat);
+    QSignalSpy aiNavigation(boardPage,&BoardConnectionPanel::aiChatRequested);
+    QTest::mouseClick(aiChat,Qt::LeftButton);assert(aiNavigation.count()==1&&aiNavigation.at(0).at(0).toInt()==77&&pages->currentWidget()==pages->widget(2));
+    QTest::mouseClick(settingsButton,Qt::LeftButton);
+    QTest::mouseClick(boardButton,Qt::LeftButton);
     auto* draft=boardPage->findChild<QPlainTextEdit*>("boardMessageText");
     auto* returnButton=boardPage->findChild<QPushButton*>("boardReturnToLanChat");
     auto* scroll=boardPage->findChild<QScrollArea*>();
@@ -53,13 +77,14 @@ int main(int argc, char** argv)
     draft->setPlainText("板端未发送草稿");
     QCoreApplication::processEvents();scroll->verticalScrollBar()->setValue(120);
     const int savedScroll=scroll->verticalScrollBar()->value();
-    QTest::mouseClick(returnButton,Qt::LeftButton);assert(pages->currentWidget()==loginPage);
+    QTest::mouseClick(returnButton,Qt::LeftButton);assert(pages->currentWidget()==pages->widget(2));
+    QTest::mouseClick(settingsButton,Qt::LeftButton);
     QTest::mouseClick(boardButton,Qt::LeftButton);
     QTest::mouseClick(boardButton,Qt::LeftButton);
     assert(window.findChildren<BoardConnectionPanel*>().size()==1);
     assert(draft->toPlainText()=="板端未发送草稿"&&scroll->verticalScrollBar()->value()==savedScroll);
-    emit session.ready(99, "Tester");
-    assert(pages->currentWidget()==boardPage);
+    QTest::mouseClick(serverButton,Qt::LeftButton);assert(contents->currentWidget()!=boardPage);
+    QTest::mouseClick(boardButton,Qt::LeftButton);assert(contents->currentWidget()==boardPage&&draft->toPlainText()=="板端未发送草稿");
     QTest::mouseClick(returnButton,Qt::LeftButton);assert(pages->currentWidget()==pages->widget(2));
     emit session.usersReceived({{"users", QJsonArray{QJsonObject{{"id", 77}, {"nickname", "Board"}}}},
                                {"groups", QJsonArray{QJsonObject{{"groupId", 9}, {"name", "Alerts"}}}}});
@@ -98,7 +123,7 @@ int main(int argc, char** argv)
     assert(afterOtherSender == 2);
     QTest::mouseClick(boardButton,Qt::LeftButton);
     emit session.messageReceived({{"fromId",88},{"toId",99},{"msg","页面切换期间继续收消息"},{"type",6}});
-    assert(store.conversation(Store::directKey(88)).size()==1&&pages->currentWidget()==boardPage);
+    assert(store.conversation(Store::directKey(88)).size()==1&&contents->currentWidget()==boardPage&&pages->currentWidget()==settingsPage);
     for(auto* topLevel:QApplication::topLevelWidgets())if(topLevel->isVisible())assert(topLevel==&window);
     const int capture = app.arguments().indexOf("--capture-board");
     if (capture > 0 && capture + 1 < app.arguments().size()) {
@@ -106,6 +131,13 @@ int main(int argc, char** argv)
         QCoreApplication::processEvents();
         assert(window.grab().save(app.arguments().at(capture + 1)));
     }
-    std::printf("BOARD ALERTS PASS: group/direct cards, embedded page, no second window, singleton/draft/scroll, login/chat return, receive while on board page\n");
+    session.logout();assert(pages->currentWidget()==loginPage&&!settingsButton->isVisible()&&!settingsButton->isEnabled());
+    window.showBoardConnection();boardButton->click();serverButton->click();assert(pages->currentWidget()==loginPage);
+    auto* address=loginPage->findChild<QLineEdit*>("loginServerAddress");auto* connectButton=loginPage->findChild<QPushButton*>("loginConnectButton");assert(address&&connectButton);
+    QSignalSpy connection(&window,&MainWindow::connectionRequested);
+    address->setText("user:password@host:12346");QTest::mouseClick(connectButton,Qt::LeftButton);assert(connection.isEmpty());
+    address->setText("100.64.0.8:12346");QTest::mouseClick(connectButton,Qt::LeftButton);assert(connection.size()==1&&connection.first().at(0).toString()=="100.64.0.8"&&!connection.first().at(2).toBool());
+    assert(QSettings().value("board_bridge/account_id").toInt()==0&&pages->currentWidget()==loginPage);
+    std::printf("BOARD ALERTS PASS: login-only settings, compact connection bootstrap, embedded board/AI/draft/scroll, original conversation and receive while in settings\n");
     return 0;
 }

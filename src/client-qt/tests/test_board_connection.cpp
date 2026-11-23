@@ -87,6 +87,7 @@ int main(int argc, char** argv)
     config.serverPort = server.serverPort();
     config.target = 55;
     config.groupId = 9;
+    config.aiEnabled=true;config.aiEndpoint="https://example.com/anthropic";config.aiModel="test-model";config.aiKey="isolated-ai-secret";
     bridge.configure(config);
     bridge.start();
     assert(waitFor([&] { return bridge.snapshot().value("frames").toInt() == 42; }));
@@ -98,7 +99,7 @@ int main(int argc, char** argv)
     assert(generated.value("lanchat/target").toInt() == 55);
     QFile ini(generated.fileName());
     assert(ini.open(QIODevice::ReadOnly));
-    assert(!ini.readAll().contains(registeredPassword.toUtf8()));
+    const auto iniBytes=ini.readAll();assert(!iniBytes.contains(registeredPassword.toUtf8())&&!iniBytes.contains("isolated-ai-secret"));
     ini.close();
     QFile settings(QSettings().fileName());
     assert(settings.open(QIODevice::ReadOnly));
@@ -111,6 +112,7 @@ int main(int argc, char** argv)
     BoardConnection restored(nullptr, dir.path() + "/restored");
     assert(restored.config().accountId == 4242);
     assert(restored.config().password == registeredPassword);
+    assert(restored.config().aiEnabled&&restored.config().aiModel=="test-model"&&restored.config().aiKey=="isolated-ai-secret");
 #endif
     bridge.start();
     const bool restarted = waitFor([&] { return bridge.snapshot().value("frames").toInt() == 42; });

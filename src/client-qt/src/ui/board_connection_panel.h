@@ -8,6 +8,7 @@ class QSpinBox;
 class Session;
 class QPlainTextEdit;
 class QPushButton;
+class QComboBox;
 
 class BoardConnectionPanel : public QWidget {
     Q_OBJECT
@@ -15,6 +16,7 @@ public:
     explicit BoardConnectionPanel(BoardConnection* bridge, QWidget* parent = nullptr, Session* session = nullptr);
 signals:
     void returnRequested();
+    void aiChatRequested(int accountId);
 private:
     void refresh();
     BoardConnection* bridge_;
@@ -26,6 +28,10 @@ private:
     QSpinBox* group_;
     QCheckBox* automatic_;
     QLineEdit* consolePath_;
+    QCheckBox* aiEnabled_;
+    QComboBox* aiProvider_;
+    QLineEdit *aiEndpoint_, *aiModel_, *aiKey_;
+    QLabel* aiState_;
     Session* session_;
     QPlainTextEdit* message_;
     QPushButton* send_;

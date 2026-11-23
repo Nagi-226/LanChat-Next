@@ -1,12 +1,14 @@
 ﻿param(
     [Parameter(Mandatory=$true)][string]$BundleDirectory,
     [string]$OutputDirectory='',
-    [ValidatePattern('^\d{1,4}\.\d{1,2}\.\d{1,2}$')][string]$ReleaseVersion='2026.11.23',
+    [ValidatePattern('^\d{1,4}\.\d{1,2}\.\d{1,2}(\.\d{1,4})?$')][string]$ReleaseVersion='2026.11.23.1',
+    [string]$LanHostAddress='',
+    [string]$TailscaleHostAddress='',
     [string]$IsccPath=''
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-if(-not $OutputDirectory){$OutputDirectory=Join-Path $root 'build\windows-installer-20261123'}
+if(-not $OutputDirectory){$OutputDirectory=Join-Path $root 'build\windows-installer-20261123-ai-ui'}
 $bundle=(Resolve-Path -LiteralPath $BundleDirectory).Path
 if(-not $IsccPath){
     $candidates=@(
@@ -54,7 +56,8 @@ foreach($file in $files){
 Copy-Item -LiteralPath (Join-Path $root 'docs\windows-quickstart.txt') -Destination (Join-Path $payload '联机使用说明.txt')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'installer\third-party') -Destination (Join-Path $payload 'third-party') -Recurse
 
-& $IsccPath ("/DPayloadDirectory=$payload") ("/DOutputDirectory=$output") ("/DReleaseVersion=$ReleaseVersion") (Join-Path $PSScriptRoot 'installer\lanchat.iss')
+$fileVersion=if($ReleaseVersion.Split('.').Count -eq 3){$ReleaseVersion+'.0'}else{$ReleaseVersion}
+& $IsccPath ("/DPayloadDirectory=$payload") ("/DOutputDirectory=$output") ("/DReleaseVersion=$ReleaseVersion") ("/DFileVersion=$fileVersion") (Join-Path $PSScriptRoot 'installer\lanchat.iss')
 if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $setup)){throw 'Inno Setup compilation failed.'}
 $manifest=[ordered]@{
     version=$ReleaseVersion
@@ -67,4 +70,32 @@ $manifest=[ordered]@{
     })
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'installer-manifest.json') -Encoding utf8
+$testkit=Join-Path $output 'testkit'
+New-Item -ItemType Directory -Path $testkit | Out-Null
+Copy-Item -LiteralPath $setup -Destination $testkit
+Copy-Item -LiteralPath (Join-Path $payload '联机使用说明.txt') -Destination (Join-Path $testkit '安装与使用说明.txt')
+Copy-Item -LiteralPath (Join-Path $output 'installer-manifest.json') -Destination $testkit
+$lanAddress=if($LanHostAddress){$LanHostAddress}else{'向测试发起者索取消息主机的局域网 IPv4 地址'}
+$tailscaleAddress=if($TailscaleHostAddress){$TailscaleHostAddress}else{'向测试发起者索取消息主机的 Tailscale 地址'}
+@"
+LanChat-Next $ReleaseVersion 联机测试连接信息
+
+同一局域网主机：$lanAddress
+异地 Tailscale 主机：$tailscaleAddress
+聊天端口：12346
+
+安装后在登录页填写「服务器地址」（地址:12346），点击「连接」，再注册 / 登录。
+凭测试发起者提供的群 ID 加入；群 ID、账户与 Tailscale 权限分别配置。
+异地用户需安装官方 Tailscale 并取得访问消息主机的权限；同一局域网可直接连接。
+主机需保持开机联网；地址变更时由发起者提供新地址。
+
+登录后：左下角齿轮 → 设置 → 服务器 / 板端连接。
+普通 PC 聊天、图片和文件无需连接板子或配置 AI 密钥。
+询问板端状态时，发起者需提供专用板端账号或已配置群 ID。
+AI 接口由连接板子的桥接主机配置；分发包不含主机账号、密钥或日志。
+本版本包含文字状态 AI、长消息完整显示、关闭按钮红色悬停和登录后设置入口。
+"@ | Set-Content -LiteralPath (Join-Path $testkit '发给测试者-连接信息.txt') -Encoding utf8
+$zip=Join-Path $output "LanChat-Next-完整联机测试包-$ReleaseVersion.zip"
+Compress-Archive -LiteralPath @(Get-ChildItem -LiteralPath $testkit -File | ForEach-Object {$_.FullName}) -DestinationPath $zip
 Write-Host "Installer: $setup"
+Write-Host "Complete test kit: $zip"

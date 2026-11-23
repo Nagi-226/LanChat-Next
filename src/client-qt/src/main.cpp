@@ -13,12 +13,24 @@
 #include "net/session.h"
 #include "ui/main_window.h"
 #include "ui/theme.h"
+#include "app/credentials.h"
+#include <QRegularExpression>
 
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
     app.setApplicationName("LanChat-Qt");
     app.setOrganizationName("LanChat");
+    // Local setup helper: import an authorized API configuration without printing its secret.
+    if(app.arguments().contains("--import-ai-env")){
+        const QString key=qEnvironmentVariable("ANTHROPIC_AUTH_TOKEN",qEnvironmentVariable("ANTHROPIC_API_KEY"));
+        const QString url=qEnvironmentVariable("ANTHROPIC_BASE_URL");QString model=qEnvironmentVariable("ANTHROPIC_MODEL");
+        model.remove(QRegularExpression("\\[1m\\]$"));const auto secret=credentials::encryptSecret(key);
+        if(key.isEmpty()||url.isEmpty()||model.isEmpty()||secret.isEmpty())return 2;
+        QSettings settings;settings.setValue("board_ai/enabled",true);settings.setValue("board_ai/provider","anthropic");
+        settings.setValue("board_ai/endpoint",url);settings.setValue("board_ai/model",model);settings.setValue("board_ai/secret",secret);settings.sync();
+        return settings.status()==QSettings::NoError?0:3;
+    }
     // 运行时窗口/任务栏图标。exe 的文件图标由 resources/app.rc 嵌进 PE 资源，
     // 两者是两处独立来源：改了图标要同时换 .ico（PE）与 .png（这份）。
     app.setWindowIcon(QIcon(":/icons/lanchat-256.png"));

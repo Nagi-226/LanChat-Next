@@ -14,14 +14,18 @@ public:
     explicit LoginView(QWidget* parent = nullptr);
     void showError(const QString& msg);
     bool rememberChecked() const;
+    QString serverAddress() const;
+    void setServerAddress(const QString& address);
 
 signals:
     void loginRequested(const QString& username, const QString& password);
     void registerRequested();
+    void connectionRequested(const QString& address);
 
 private:
     QLineEdit* user_;
     QLineEdit* pass_;
     QCheckBox* remember_;
     QLabel* err_;
+    QLineEdit* server_;
 };

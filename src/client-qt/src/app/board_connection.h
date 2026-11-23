@@ -23,6 +23,9 @@ public:
         QString consolePath;
         bool logEnabled = false;
         QString logPort = "COM3";
+        bool aiEnabled = false;
+        QString aiProvider = "anthropic";
+        QString aiEndpoint, aiModel, aiKey;
     };
     explicit BoardConnection(QObject* parent = nullptr, const QString& profileDir = {});
     ~BoardConnection() override;

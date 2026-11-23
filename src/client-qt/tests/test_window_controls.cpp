@@ -12,6 +12,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QFile>
+#include <QEnterEvent>
 #include <functional>
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -31,6 +32,24 @@ int main(int argc,char** argv){
     auto* minimize=window.findChild<QPushButton*>("windowMinimizeButton");auto* maximize=window.findChild<QPushButton*>("windowMaximizeButton");auto* close=window.findChild<QPushButton*>("windowCloseButton");auto* title=window.findChild<QWidget*>("windowTitleBar");
     assert(minimize&&maximize&&close&&title);assert(waitFor([&]{return window.isVisible();}));
     for(auto* button:{minimize,maximize,close}){assert(button->size()==QSize(46,40));assert(button->iconSize()==QSize(12,12));assert(!button->icon().isNull());assert(button->text().isEmpty());assert(!button->accessibleName().isEmpty());}
+    window.raise();window.activateWindow();QTest::qWait(100);
+    auto movePointer=[&](QWidget* target,const QPoint& point){
+#ifdef Q_OS_WIN
+        if(QGuiApplication::platformName()=="windows"){
+            // Test Qt hover dispatch/painting in a real window without requiring an input desktop.
+            QEvent leave(QEvent::Leave);QApplication::sendEvent(close,&leave);
+            QEnterEvent enter(point,target->mapTo(&window,point),target->mapToGlobal(point));QApplication::sendEvent(target,&enter);QTest::qWait(100);return;
+        }
+#endif
+        QTest::mouseMove(target,point);QTest::qWait(100);
+    };
+    movePointer(close,close->rect().center());
+    const auto hover=close->grab().toImage();const auto hoverColor=hover.pixelColor(qRound(10*hover.devicePixelRatio()),qRound(10*hover.devicePixelRatio()));
+    std::fprintf(stderr,"close hover: %s alpha=%d, underMouse=%d nativeHover=%d visible=%d size=%dx%d windowActive=%d\n",qPrintable(hoverColor.name()),hoverColor.alpha(),close->underMouse(),close->property("nativeHover").toBool(),close->isVisible(),close->width(),close->height(),window.isActiveWindow());
+    if(QGuiApplication::platformName()=="windows")window.grab().save(QCoreApplication::applicationDirPath()+"/native-hover-window.png");
+    assert(hoverColor==QColor("#C42B1C"));
+    movePointer(title,QPoint(200,20));
+    const auto idle=close->grab().toImage();assert(idle.pixelColor(qRound(10*idle.devicePixelRatio()),qRound(10*idle.devicePixelRatio()))!=hoverColor);
     const auto normalIcon=maximize->icon().pixmap(QSize(24,24)).toImage();
     QTest::mouseClick(maximize,Qt::LeftButton);assert(waitFor([&]{return window.isMaximized();}));assert(maximize->property("captionAction").toString()=="restore");assert(maximize->icon().pixmap(QSize(24,24)).toImage()!=normalIcon);
     const auto args=app.arguments();QString captures;if(args.contains("--capture-dir")){captures=args.value(args.indexOf("--capture-dir")+1);QDir().mkpath(captures);assert(title->grab().save(captures+"/maximized-titlebar.png"));assert(window.findChild<QWidget*>("windowCaptionButtons")->grab().save(captures+"/maximized-buttons.png"));}
@@ -44,7 +63,7 @@ int main(int argc,char** argv){
         auto screenPoint=[&](const QPoint& point){POINT native{qRound(point.x()*window.devicePixelRatioF()),qRound(point.y()*window.devicePixelRatioF())};ClientToScreen(hwnd,&native);return MAKELPARAM(native.x,native.y);};
         auto hit=[&](QWidget* widget,const QPoint& point){return SendMessageW(hwnd,WM_NCHITTEST,0,screenPoint(widget->mapTo(&window,point)));};
         assert(hit(title,QPoint(200,20))==HTCAPTION);assert(hit(minimize,minimize->rect().center())==HTCLIENT);assert(hit(maximize,maximize->rect().center())==HTMAXBUTTON);assert(hit(close,close->rect().center())==HTCLIENT);
-        auto* board=window.findChild<QPushButton*>("boardConnectionButton");assert(board&&hit(board,board->rect().center())==HTCLIENT);
+        assert(!window.findChild<QPushButton*>("boardConnectionButton")&&!window.findChild<QPushButton*>("serverSettingsButton"));
         RECT normal{};GetWindowRect(hwnd,&normal);assert(SendMessageW(hwnd,WM_NCHITTEST,0,MAKELPARAM(normal.left+2,normal.top+2))==HTTOPLEFT);assert(SendMessageW(hwnd,WM_NCHITTEST,0,MAKELPARAM(normal.right-2,(normal.top+normal.bottom)/2))==HTRIGHT);
         SendMessageW(hwnd,WM_SYSCOMMAND,SC_MAXIMIZE,0);assert(waitFor([&]{return window.isMaximized()&&IsZoomed(hwnd);}));assert(maximize->property("captionAction").toString()=="restore");
         MONITORINFO monitor{sizeof(MONITORINFO)};assert(GetMonitorInfoW(MonitorFromWindow(hwnd,MONITOR_DEFAULTTONEAREST),&monitor));RECT client{};GetClientRect(hwnd,&client);POINT origin{0,0};ClientToScreen(hwnd,&origin);

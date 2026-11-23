@@ -87,7 +87,7 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     setWindowFlags(Qt::Window|Qt::FramelessWindowHint|Qt::WindowSystemMenuHint|Qt::WindowMinimizeButtonHint|Qt::WindowMaximizeButtonHint|Qt::WindowCloseButtonHint);
     setWindowTitle("LanChat-Next");
     resize(1300, 800);
-    // 板端账号：Console 桥登录用的那个 LanChat 账号 id；左栏齿轮可改，存 ini
+    // 专用板端账号由登录后的设置面板管理，与普通聊天账号分开。
     boardId_ = QSettings().value("board_account_id", 0).toInt();
     bridge_ = new BoardConnection(this);
     if (bridge_->config().accountId > 0) boardId_ = bridge_->config().accountId;
@@ -109,10 +109,12 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     setCentralWidget(stack_);
     buildTitleBar();
 
-    connect(login_, &LoginView::registerRequested, this, [this] { stack_->setCurrentWidget(reg_); });
+    connect(login_, &LoginView::registerRequested, this, [this] { if(configureLoginConnection(login_->serverAddress()))stack_->setCurrentWidget(reg_); });
+    connect(login_,&LoginView::connectionRequested,this,[this](const QString& address){configureLoginConnection(address);});
     connect(reg_, &RegisterView::backRequested, this, [this] { stack_->setCurrentWidget(login_); });
     connect(login_, &LoginView::loginRequested, this, [this](const QString& u, const QString& p) {
         login_->showError("");
+        if(!configureLoginConnection(login_->serverAddress()))return;
         pendingUser_ = u;
         pendingPass_ = p;
         sess_->login(u, p);
@@ -136,8 +138,11 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         // 记住账户只在登录成功后落盘：错密码不会被记下来
         if (login_->rememberChecked()) credentials::save(pendingUser_, pendingPass_);
         else credentials::clear();
-        if(stack_->currentWidget()==boardPanel_)boardReturnPage_=stack_->widget(2);
-        else stack_->setCurrentIndex(2);
+        contacts_->setAuthenticated(true);
+        stack_->setCurrentIndex(2);
+    });
+    connect(sess_,&Session::stateChanged,this,[this](const QString&){
+        if(selfId_>0&&sess_->selfId()<1){selfId_=0;contacts_->setAuthenticated(false);stack_->setCurrentWidget(login_);}
     });
     connect(sess_, &Session::usersReceived, this, [this](const QJsonObject& o) {
         const auto users = o.value("users").toArray();
@@ -226,7 +231,7 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     connect(contacts_, &ContactsPanel::contactSelected, this, [this](int id) { openConversation(id, false); });
     connect(contacts_, &ContactsPanel::groupSelected, this, [this](int id) { openConversation(id, true); });
     connect(contacts_, &ContactsPanel::alertSelected, this, [this](int id, bool group) { openConversation(id, group); });
-    connect(contacts_, &ContactsPanel::boardConfigRequested, this, &MainWindow::showBoardConnection);
+    connect(contacts_, &ContactsPanel::settingsRequested, this, &MainWindow::showSettings);
     connect(contacts_, &ContactsPanel::createGroupRequested, this, [this] {
         bool ok = false;
         const QString name = QInputDialog::getText(this, "建群", "群名称：", QLineEdit::Normal, "", &ok);
@@ -281,7 +286,7 @@ void MainWindow::buildTitleBar()
     titleBar_->setObjectName("windowTitleBar");
     titleBar_->setFixedHeight(40);
     titleBar_->setAttribute(Qt::WA_StyledBackground, true);
-    titleBar_->setStyleSheet("background-color:#0E1014;");
+    titleBar_->setStyleSheet("QWidget#windowTitleBar {background-color:#0E1014;}");
     auto* lay = new QHBoxLayout(titleBar_);
     lay->setContentsMargins(12, 0, 0, 0);
     lay->setSpacing(4);
@@ -292,23 +297,13 @@ void MainWindow::buildTitleBar()
     titleBar_->installEventFilter(this);
     lay->addWidget(title);
     lay->addStretch(1);
-    auto* network=new QPushButton("服务器",titleBar_);network->setObjectName("serverSettingsButton");
-    connect(network,&QPushButton::clicked,this,&MainWindow::showConnectionSettings);lay->addWidget(network);
-    connect(sess_,&Session::stateChanged,network,[this,network](const QString& state){network->setToolTip(sess_->endpoint()+" · "+state);});
-    auto* board = new QPushButton("板端连接", titleBar_);
-    board->setObjectName("boardConnectionButton");
-    connect(board, &QPushButton::clicked, this, &MainWindow::showBoardConnection);
-    connect(bridge_, &BoardConnection::changed, board, [this, board] {
-        board->setText(bridge_->snapshot().value("board_connected").toBool() ? "板端连接 · 已连接" : "板端连接");
-        board->setToolTip(bridge_->state());
-    });
-    lay->addWidget(board);
-    auto* controls=new QWidget(titleBar_);controls->setObjectName("windowCaptionButtons");controls->setStyleSheet("background:transparent;");
+    auto* controls=new QWidget(titleBar_);controls->setObjectName("windowCaptionButtons");controls->setStyleSheet("QWidget#windowCaptionButtons {background:transparent;}");
     auto* controlLayout=new QHBoxLayout(controls);controlLayout->setContentsMargins(0,0,0,0);controlLayout->setSpacing(0);
     auto* min = new QPushButton(controls);min->setObjectName("windowMinimizeButton");min->setIcon(captionIcon(CaptionAction::Minimize));min->setToolTip("最小化");min->setAccessibleName("最小化");
     auto* max = new QPushButton(controls);max->setObjectName("windowMaximizeButton");maximizeBtn_=max;
-    auto* close = new QPushButton(controls);close->setObjectName("windowCloseButton");close->setIcon(captionIcon(CaptionAction::Close));close->setToolTip("关闭");close->setAccessibleName("关闭");
+    auto* close = new QPushButton(controls);closeBtn_=close;close->setObjectName("windowCloseButton");close->setIcon(captionIcon(CaptionAction::Close));close->setToolTip("关闭");close->setAccessibleName("关闭");
     for (auto* b : {min, max, close}) {b->setProperty("windowControl",true);b->setFixedSize(46,40);b->setIconSize(QSize(12,12));controlLayout->addWidget(b);}
+    close->installEventFilter(this);
     connect(min, &QPushButton::clicked, this, [this] { showMinimized(); });
     connect(max, &QPushButton::clicked, this, &MainWindow::toggleMaximized);
     connect(close, &QPushButton::clicked, this, [this] { this->close(); });
@@ -382,16 +377,22 @@ bool MainWindow::isBoardAlert(const Message& m) const
 
 void MainWindow::showBoardConnection()
 {
+    if(selfId_<1)return;
+    ensureSettingsPage();
     // One persistent page keeps the draft, pending delivery and scroll position intact.
     if(!boardPanel_){
-        boardPanel_=new BoardConnectionPanel(bridge_,stack_,sess_);
-        stack_->addWidget(boardPanel_);
+        boardPanel_=new BoardConnectionPanel(bridge_,settingsStack_,sess_);
+        settingsStack_->addWidget(boardPanel_);
+        connect(boardPanel_,&BoardConnectionPanel::aiChatRequested,this,[this](int accountId){
+            if(selfId_<1){stack_->setCurrentWidget(login_);return;}
+            openConversation(accountId,false);stack_->setCurrentIndex(2);
+        });
         connect(boardPanel_,&BoardConnectionPanel::returnRequested,this,[this]{
-            stack_->setCurrentWidget(boardReturnPage_?boardReturnPage_:static_cast<QWidget*>(login_));
+            stack_->setCurrentIndex(selfId_>0?2:0);
         });
     }
-    if(stack_->currentWidget()!=boardPanel_)boardReturnPage_=stack_->currentWidget();
-    stack_->setCurrentWidget(boardPanel_);
+    serverSettingsBtn_->setChecked(false);boardSettingsBtn_->setChecked(true);
+    settingsStack_->setCurrentWidget(boardPanel_);stack_->setCurrentWidget(settingsPage_);
 }
 
 int MainWindow::alertLevelFor(const QString& text) const
@@ -459,6 +460,7 @@ void MainWindow::toggleMaximized(){
 void MainWindow::changeEvent(QEvent* event){QMainWindow::changeEvent(event);if(event->type()==QEvent::WindowStateChange)updateWindowControls();}
 void MainWindow::showEvent(QShowEvent* event){QMainWindow::showEvent(event);configureNativeFrame();}
 bool MainWindow::eventFilter(QObject* watched,QEvent* event){
+    if(watched==closeBtn_&&(event->type()==QEvent::Enter||event->type()==QEvent::Leave))setCloseHover(event->type()==QEvent::Enter);
     // 非 Windows 平台也使用窗口管理器的移动流程；Windows 走下面的原生 HTCAPTION。
     if(watched==titleBar_&&event->type()==QEvent::MouseButtonDblClick){
         if(static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton){toggleMaximized();return true;}
@@ -471,6 +473,10 @@ bool MainWindow::eventFilter(QObject* watched,QEvent* event){
 void MainWindow::setMaximizeHover(bool hovered){
     if(!maximizeBtn_||maximizeBtn_->property("nativeHover").toBool()==hovered)return;
     maximizeBtn_->setProperty("nativeHover",hovered);maximizeBtn_->style()->unpolish(maximizeBtn_);maximizeBtn_->style()->polish(maximizeBtn_);maximizeBtn_->update();
+}
+void MainWindow::setCloseHover(bool hovered){
+    if(!closeBtn_||closeBtn_->property("nativeHover").toBool()==hovered)return;
+    closeBtn_->setProperty("nativeHover",hovered);closeBtn_->style()->unpolish(closeBtn_);closeBtn_->style()->polish(closeBtn_);closeBtn_->update();
 }
 void MainWindow::configureNativeFrame(){
 #ifdef Q_OS_WIN
@@ -524,6 +530,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType,void* message,qintptr* 
 void MainWindow::loadDemoData(bool withMessages, bool openBoard)
 {
     selfId_ = 1;
+    contacts_->setAuthenticated(true);
     store_->setSelfId(1);
     chat_->setSelfId(1);
     store_->upsertContact(2, "Alice", true);
@@ -571,29 +578,75 @@ void MainWindow::renderConversation(){
     for(const auto& m:store_->conversation(key)){renderMessage(m,groupedWith(last,m.fromId,m.ts),isBoardAlert(m)?alertLevelFor(m.text):0);last={m.fromId,m.ts};}lastMsg_[key]=last;
 }
 void MainWindow::refreshTransfers(){if(transferUpdatePending_)return;transferUpdatePending_=true;QTimer::singleShot(100,this,[this]{transferUpdatePending_=false;chat_->setTransfers(transfers_->tasks());});}
-void MainWindow::showConnectionSettings(){
-    auto* page=new QWidget(stack_);auto* outer=new QVBoxLayout(page);outer->addStretch();
-    auto* formWidget=new QWidget(page);formWidget->setMaximumWidth(560);auto* form=new QFormLayout(formWidget);
-    auto* mode=new QComboBox(formWidget);mode->addItems({"本机托管（其他电脑连接本机）","连接公司局域网主机"});
-    QSettings settings;mode->setCurrentIndex(settings.value("network/hosted",true).toBool()?0:1);
-    auto* host=new QLineEdit(settings.value("network/host","127.0.0.1").toString(),formWidget);host->setObjectName("serverHost");
-    auto* port=new QSpinBox(formWidget);port->setRange(1024,65534);port->setValue(settings.value("network/port",12346).toInt());
-    auto* maximum=new QSpinBox(formWidget);maximum->setRange(1,1024);maximum->setValue(settings.value("network/attachment_max_mb",100).toInt());maximum->setSuffix(" MB");
-    auto* hint=new QLabel("公司内的所有用户连接同一台常开 PC。\n本机托管时，请允许 Windows 防火墙的专用网络入站连接。\n主机的数据与附件统一保存在 LanChat-Next/data。",formWidget);hint->setWordWrap(true);
-    form->addRow("服务器模式",mode);form->addRow("主机地址",host);form->addRow("TCP 端口",port);form->addRow("单附件上限",maximum);form->addRow(hint);
-    auto* apply=new QPushButton("保存并重新连接",formWidget);auto* back=new QPushButton("返回",formWidget);form->addRow(apply,back);
-    host->setEnabled(mode->currentIndex()==1);connect(mode,&QComboBox::currentIndexChanged,host,[host](int index){host->setEnabled(index==1);});
-    outer->addWidget(formWidget,0,Qt::AlignHCenter);outer->addStretch();auto* previous=stack_->currentWidget();stack_->addWidget(page);stack_->setCurrentWidget(page);
-    connect(back,&QPushButton::clicked,this,[this,page,previous]{stack_->setCurrentWidget(previous);stack_->removeWidget(page);page->deleteLater();});
-    connect(apply,&QPushButton::clicked,this,[=,this]{
-        bool hosted=mode->currentIndex()==0;QString address=hosted?"127.0.0.1":host->text().trimmed();if(address.isEmpty()){host->setFocus();return;}
-        QSettings cfg;cfg.setValue("network/hosted",hosted);cfg.setValue("network/host",host->text().trimmed());cfg.setValue("network/port",port->value());cfg.setValue("network/attachment_max_mb",maximum->value());
-        sess_->logout();store_->clear();selfId_=0;currentPeer_=0;groups_.clear();groupMembers_.clear();historyCursors_.clear();unread_.clear();alerts_.clear();lastMsg_.clear();chat_->clear();refreshContacts();refreshGroups();refreshMembers();refreshAlerts();
-        auto bridgeConfig=bridge_->config();bool wasRunning=bridge_->running();bridge_->stop();
-        bool changedServer=bridgeConfig.serverHost!=address||bridgeConfig.serverPort!=quint16(port->value());
-        bridgeConfig.serverHost=address;bridgeConfig.serverPort=quint16(port->value());
-        if(changedServer){bridgeConfig.accountId=0;bridgeConfig.password.clear();bridgeConfig.target=0;bridgeConfig.groupId=0;bridgeConfig.autoStart=false;boardId_=0;QSettings().setValue("board_account_id",0);}
-        bridge_->configure(bridgeConfig);if(wasRunning&&!changedServer)bridge_->start();
-        stack_->setCurrentWidget(login_);stack_->removeWidget(page);emit connectionRequested(address,quint16(port->value()),hosted,maximum->value());page->deleteLater();
+void MainWindow::ensureSettingsPage() {
+    if(settingsPage_)return;
+    settingsPage_=new QWidget(stack_);settingsPage_->setObjectName("settingsPage");
+    auto* layout=new QHBoxLayout(settingsPage_);layout->setContentsMargins(0,0,0,0);layout->setSpacing(0);
+    auto* navigation=new QWidget(settingsPage_);navigation->setObjectName("settingsNavigation");navigation->setFixedWidth(268);navigation->setAttribute(Qt::WA_StyledBackground);
+    auto* side=new QVBoxLayout(navigation);side->setContentsMargins(16,24,16,16);side->setSpacing(10);
+    auto* heading=new QLabel("设置",navigation);heading->setObjectName("headerTitle");side->addWidget(heading);
+    auto* account=new QLabel(QString("已登录 · 账号 #%1").arg(selfId_),navigation);account->setObjectName("settingsAccountLabel");side->addWidget(account);side->addSpacing(18);
+    serverSettingsBtn_=new QPushButton("服务器",navigation);serverSettingsBtn_->setObjectName("serverSettingsButton");
+    boardSettingsBtn_=new QPushButton("板端连接",navigation);boardSettingsBtn_->setObjectName("boardConnectionButton");
+    for(auto* button:{serverSettingsBtn_,boardSettingsBtn_}){button->setProperty("settingsNavigation",true);button->setCheckable(true);button->setCursor(Qt::PointingHandCursor);side->addWidget(button);}
+    side->addStretch();auto* back=new QPushButton("返回聊天",navigation);back->setObjectName("settingsReturnToChat");side->addWidget(back);
+    settingsStack_=new QStackedWidget(settingsPage_);settingsStack_->setObjectName("settingsContents");layout->addWidget(navigation);layout->addWidget(settingsStack_,1);stack_->addWidget(settingsPage_);
+    connect(back,&QPushButton::clicked,this,[this]{stack_->setCurrentIndex(selfId_>0?2:0);});
+    connect(serverSettingsBtn_,&QPushButton::clicked,this,&MainWindow::showConnectionSettings);
+    connect(boardSettingsBtn_,&QPushButton::clicked,this,&MainWindow::showBoardConnection);
+    connect(bridge_,&BoardConnection::changed,boardSettingsBtn_,[this]{
+        boardSettingsBtn_->setText(bridge_->snapshot().value("board_connected").toBool()?"板端连接 · 已连接":"板端连接");boardSettingsBtn_->setToolTip(bridge_->state());
     });
+}
+void MainWindow::showSettings() {
+    if(selfId_<1)return;ensureSettingsPage();
+    settingsPage_->findChild<QLabel*>("settingsAccountLabel")->setText(QString("已登录 · 账号 #%1").arg(selfId_));
+    showConnectionSettings();
+}
+void MainWindow::showConnectionSettings(){
+    if(selfId_<1)return;ensureSettingsPage();
+    if(!serverPage_){
+        serverPage_=new QWidget(settingsStack_);serverPage_->setObjectName("serverSettingsPage");auto* outer=new QVBoxLayout(serverPage_);outer->setContentsMargins(28,28,28,28);
+        auto* formWidget=new QFrame(serverPage_);formWidget->setObjectName("settingsCard");formWidget->setMaximumWidth(640);auto* form=new QFormLayout(formWidget);form->setContentsMargins(24,24,24,24);form->setVerticalSpacing(16);
+        auto* title=new QLabel("服务器连接",formWidget);title->setObjectName("headerTitle");form->addRow(title);
+        auto* mode=new QComboBox(formWidget);mode->setObjectName("serverMode");mode->addItems({"本机托管（其他电脑连接本机）","连接局域网 / Tailscale 消息主机"});
+        auto* host=new QLineEdit(formWidget);host->setObjectName("serverHost");
+        auto* port=new QSpinBox(formWidget);port->setObjectName("serverPort");port->setRange(1024,65534);
+        auto* maximum=new QSpinBox(formWidget);maximum->setObjectName("attachmentLimit");maximum->setRange(1,1024);maximum->setSuffix(" MB");
+        auto* hint=new QLabel("所有用户连接同一台常开消息主机。\n本机托管需允许专用网络入站连接。\n修改连接后需在目标服务器重新登录。",formWidget);hint->setObjectName("settingsHint");hint->setWordWrap(true);
+        form->addRow("服务器模式",mode);form->addRow("主机地址",host);form->addRow("TCP 端口",port);form->addRow("单附件上限",maximum);form->addRow(hint);
+        auto* apply=new QPushButton("保存并重新连接",formWidget);apply->setObjectName("serverSettingsApply");form->addRow(apply);
+        connect(mode,&QComboBox::currentIndexChanged,host,[host](int index){host->setEnabled(index==1);});
+        outer->addWidget(formWidget,0,Qt::AlignHCenter);outer->addStretch();settingsStack_->addWidget(serverPage_);
+        connect(apply,&QPushButton::clicked,this,[this,mode,host,port,maximum]{
+            if(selfId_<1)return;const bool hosted=mode->currentIndex()==0;const QString address=hosted?"127.0.0.1":host->text().trimmed();
+            if(address.isEmpty()){host->setFocus();return;}changeConnection(address,quint16(port->value()),hosted,maximum->value());
+        });
+    }
+    QSettings settings;auto* mode=serverPage_->findChild<QComboBox*>("serverMode");mode->setCurrentIndex(settings.value("network/hosted",true).toBool()?0:1);
+    auto* host=serverPage_->findChild<QLineEdit*>("serverHost");host->setText(settings.value("network/host","127.0.0.1").toString());host->setEnabled(mode->currentIndex()==1);
+    serverPage_->findChild<QSpinBox*>("serverPort")->setValue(settings.value("network/port",12346).toInt());serverPage_->findChild<QSpinBox*>("attachmentLimit")->setValue(settings.value("network/attachment_max_mb",100).toInt());
+    serverSettingsBtn_->setChecked(true);boardSettingsBtn_->setChecked(false);settingsStack_->setCurrentWidget(serverPage_);stack_->setCurrentWidget(settingsPage_);
+}
+bool MainWindow::configureLoginConnection(const QString& address) {
+    const QUrl url("tcp://"+address);const int port=url.port(12346);const QString host=url.host();
+    if(!url.isValid()||host.isEmpty()||!url.userInfo().isEmpty()||!url.path().isEmpty()||url.hasQuery()||url.hasFragment()||port<1024||port>65534){login_->showError("请输入有效的主机地址和端口，例如 100.64.0.1:12346");return false;}
+    QSettings settings;const bool hosted=host=="127.0.0.1"||host=="localhost"||host=="::1";
+    const QString current=settings.value("network/hosted",true).toBool()?"127.0.0.1":settings.value("network/host","127.0.0.1").toString();
+    if(current!=host||settings.value("network/port",12346).toInt()!=port)changeConnection(host,quint16(port),hosted,settings.value("network/attachment_max_mb",100).toInt());
+    login_->showError("");return true;
+}
+void MainWindow::changeConnection(const QString& address,quint16 port,bool hosted,int maximum) {
+    QSettings cfg;cfg.setValue("network/hosted",hosted);cfg.setValue("network/host",address);cfg.setValue("network/port",port);cfg.setValue("network/attachment_max_mb",maximum);
+    sess_->logout();store_->clear();selfId_=0;contacts_->setAuthenticated(false);currentPeer_=0;currentIsGroup_=false;groups_.clear();groupMembers_.clear();historyCursors_.clear();unread_.clear();alerts_.clear();lastMsg_.clear();chat_->clear();refreshContacts();refreshGroups();refreshMembers();refreshAlerts();
+    auto bridgeConfig=bridge_->config();const bool wasRunning=bridge_->running();bridge_->stop();
+    const bool changedServer=bridgeConfig.serverHost!=address||bridgeConfig.serverPort!=port;bridgeConfig.serverHost=address;bridgeConfig.serverPort=port;
+    if(changedServer){
+        bridgeConfig.accountId=0;bridgeConfig.password.clear();bridgeConfig.target=0;bridgeConfig.groupId=0;bridgeConfig.autoStart=false;boardId_=0;QSettings().setValue("board_account_id",0);
+        // IDs belong to one server. A new page must not reapply the previous server's draft settings.
+        if(boardPanel_){settingsStack_->removeWidget(boardPanel_);boardPanel_->deleteLater();boardPanel_=nullptr;}
+    }
+    bridge_->configure(bridgeConfig);if(wasRunning&&!changedServer)bridge_->start();
+    login_->setServerAddress((address.contains(':')?'['+address+']':address)+":"+QString::number(port));
+    stack_->setCurrentWidget(login_);emit connectionRequested(address,port,hosted,maximum);
 }

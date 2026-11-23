@@ -11,8 +11,24 @@
 #include <QStyle>
 #include <QMouseEvent>
 #include <QEvent>
+#include <QIconEngine>
+#include <QPainter>
+#include <QPainterPath>
+#include <cmath>
 
 namespace {
+class SettingsIcon : public QIconEngine {
+public:
+    QIconEngine* clone() const override {return new SettingsIcon;}
+    QPixmap pixmap(const QSize& size,QIcon::Mode mode,QIcon::State state) override {
+        QPixmap pixmap(size);pixmap.fill(Qt::transparent);QPainter painter(&pixmap);paint(&painter,QRect(QPoint(),size),mode,state);return pixmap;
+    }
+    void paint(QPainter* painter,const QRect& rect,QIcon::Mode mode,QIcon::State) override {
+        painter->save();painter->setRenderHint(QPainter::Antialiasing);painter->translate(rect.center()+QPointF(.5,.5));painter->scale(rect.width()/20.,rect.height()/20.);
+        QPainterPath gear;for(int i=0;i<32;++i){double angle=i*3.141592653589793/16.;double r=i%4==1||i%4==2?9.:7.;QPointF point(r*std::cos(angle),r*std::sin(angle));if(i==0)gear.moveTo(point);else gear.lineTo(point);}gear.closeSubpath();gear.addEllipse(QPointF(0,0),3.,3.);
+        painter->setPen(Qt::NoPen);painter->setBrush(mode==QIcon::Active?QColor("#E7EAF0"):QColor("#98A1B2"));painter->drawPath(gear);painter->restore();
+    }
+};
 QLabel* sectionTitle(const QString& text, QWidget* parent)
 {
     auto* l = new QLabel(text.toUpper(), parent); // uppercase 用代码（QSS 不支持 text-transform）
@@ -88,7 +104,7 @@ ContactsPanel::ContactsPanel(QWidget* parent) : QWidget(parent)
     gs->setWidget(gbody);
     lay->addWidget(gs, 1);
 
-    // 板端告警分节（可滚动）：标题行带齿轮，点齿轮配置"板端账号 id"
+    // 板端告警分节；连接与服务器设置统一从底部齿轮进入。
     auto* as = new QScrollArea(this);
     as->setWidgetResizable(true);
     as->setFrameShape(QFrame::NoFrame);
@@ -103,17 +119,10 @@ ContactsPanel::ContactsPanel(QWidget* parent) : QWidget(parent)
     ah->setSpacing(4);
     ah->addWidget(sectionTitle("板端告警", ahead));
     ah->addStretch(1);
-    auto* gear = new QPushButton(QStringLiteral("⚙"), ahead);
-    gear->setObjectName("gearBtn");
-    gear->setFixedSize(20, 20);
-    gear->setCursor(Qt::PointingHandCursor);
-    gear->setToolTip("设置板端账号：Console 桥用哪个 LanChat 账号发告警，这里就填那个账号的数字 id");
-    ah->addWidget(gear);
     alertLay_->addWidget(ahead);
     alertLay_->addStretch(1);
     as->setWidget(abody);
     lay->addWidget(as, 1);
-    connect(gear, &QPushButton::clicked, this, &ContactsPanel::boardConfigRequested);
 
     // 底部建群/加入
     auto* bottom = new QWidget(this);
@@ -126,10 +135,19 @@ ContactsPanel::ContactsPanel(QWidget* parent) : QWidget(parent)
     bo->addWidget(join);
     lay->addWidget(bottom);
 
+    auto* footer=new QWidget(this);footer->setObjectName("sidebarFooter");
+    auto* footerLayout=new QHBoxLayout(footer);footerLayout->setContentsMargins(12,8,12,12);
+    settingsButton_=new QPushButton(footer);settingsButton_->setObjectName("settingsButton");settingsButton_->setIcon(QIcon(new SettingsIcon));settingsButton_->setIconSize(QSize(20,20));settingsButton_->setFixedSize(38,38);
+    settingsButton_->setToolTip("设置：服务器与板端连接");settingsButton_->setAccessibleName("设置");settingsButton_->setCursor(Qt::PointingHandCursor);settingsButton_->setEnabled(false);
+    footerLayout->addWidget(settingsButton_);auto* footerText=new QLabel("设置",footer);footerText->setObjectName("timestamp");footerLayout->addWidget(footerText);footerLayout->addStretch();lay->addWidget(footer);
+    connect(settingsButton_,&QPushButton::clicked,this,&ContactsPanel::settingsRequested);
+
     connect(create, &QPushButton::clicked, this, &ContactsPanel::createGroupRequested);
     connect(join, &QPushButton::clicked, this, &ContactsPanel::joinGroupRequested);
     connect(filter_, &QLineEdit::textChanged, this, &ContactsPanel::filterChanged);
 }
+
+void ContactsPanel::setAuthenticated(bool authenticated) {settingsButton_->setEnabled(authenticated);}
 
 QWidget* ContactsPanel::makeRow(const ContactItem& it, bool isGroup)
 {
