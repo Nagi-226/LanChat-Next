@@ -2,7 +2,7 @@
 
 面向可信公司局域网的桌面聊天应用，采用 **C++17 / Asio 服务端 + Qt6 Widgets 原生客户端**。在 RoboMind 系列中，同时提供告警送达和板端消息显示入口。
 
-> 当前状态：2026-11-23。Qt 原生客户端已取代 Tauri；共享主机、群管理、历史同步、PC 附件、四项设备查询与 USB 板端日志初版已落地；普通 Unicode 表情作为文字发送。下表按当前 Qt 实现记录，旧客户端的功能不自动视为已经迁移。
+> 当前状态：2026-11-23。Qt 原生客户端已取代 Tauri；共享主机、群管理、历史同步、PC 附件、四项设备查询与 USB 板端日志初版已落地。日志自动跟随、统一窗口图标及 Windows 原生窗口操作已合入 master 并推送；普通 Unicode 表情作为文字发送。下表按当前 Qt 实现记录，旧客户端的功能不自动视为已经迁移。
 
 ## 当前能力
 
@@ -24,6 +24,12 @@
 **部署边界**：当前服务端必要修复与本轮功能一起收口，包括用户名登录、bcrypt v2 密码存储、admin 初始化和 MinGW 链接。聊天 TCP 尚无 TLS / 端到端加密，适用于可信 LAN 或加密组网；公司生产压力和两台物理 PC 的网络验收仍需进行。
 
 Tauri / React 客户端在 [legacy/tauri-client/](legacy/tauri-client/) 保留历史。其 AI、主题、文件选择等旧功能，不作为当前 Qt 客户端的完成清单。
+
+## 界面预览
+
+运行日志页采用深色卡片、等级色带和 **跟随最新**，支持筛选、暂停、复制及导出。下图使用**示例日志**展示界面，不作为实板运行证据。
+
+![运行日志页样式预览（示例日志）](docs/images/board-logs-demo.png)
 
 ## 在 RoboMind 系列中的链路
 
@@ -157,6 +163,15 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 同日窗口修复：统一控制图标、最大化 / 还原图标同步及 Windows 原生窗口操作已部署，Qt **14/14**（含真实 Windows 工作区 / 命中 / 窗口命令检查）通过。实际拖拽吸附、Snap 悬停面板和多屏手势仍待实机确认，见 [验证范围](docs/window-behavior.md)。
 
 协议与实现说明：[附件协议](docs/attachment-protocol.md)、[局域网部署](docs/lan-deployment.md)、[板端面板](docs/board-panel.md)。
+
+## 2026-11-23 主分支更新
+
+| 仓库 | 已合入 master 的功能提交 |
+|---|---|
+| LanChat-Next | [`e99ab22`](https://github.com/Nagi-226/LanChat-Next/commit/e99ab220e63e58bc0abcd43654ac1033f58b8aad)：USB 日志页、聊天查询、样式 / 自动跟随、窗口按钮与原生 Windows 操作 |
+| RoboMind-Console | [`aebe932`](https://github.com/Nagi-226/RoboMind_Console/commit/aebe9323503ff1f9f7d47f4f61aea1a7f6d413b1)：独立 USB 串口采集、脱敏有界缓存、滚动历史与原会话日志回复 |
+
+Qt **14/14** 通过；Console 缓存、状态查询和真实服务端日志命令回归通过。此前真实 COM3 与日志初版安装器验收记录保留；本次合入未重复烧录或硬件验收。实际拖拽吸附、Snap 悬停、多屏操作和异地两台 PC 仍待验收。
 
 ## 目录与历史
 

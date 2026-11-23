@@ -94,6 +94,8 @@ LanChat 私聊 / 配置群
 
 用户批准界面原型后，Console 串口采集 / 脱敏 / 有界缓存、LanChat 本体运行日志页、`/日志` 四种只读命令已实施。Qt SerialPort SDK 与安装包依赖已补齐；本机部署、两处桌面快捷方式和 2026.11.23 安装器已更新。
 
-Qt 12/12、Console 缓存与查询回归、真实 COM3 / 临时账号 / 数据库中的私聊和群回复通过；安装目录完成真实日志页、单次输入 / 回复、停采、占用恢复与轮换。安装器 60 文件哈希、升级、卸载与个人数据保留通过。源码在两仓 `codex/board-runtime-logs` 分支，本轮尚未提交或推送；既有 legacy / 工具 WIP 保留。
+日志初版 Qt 12/12、Console 缓存与查询回归、真实 COM3 / 临时账号 / 数据库中的私聊和群回复通过；安装目录完成真实日志页、单次输入 / 回复、停采、占用恢复与轮换。安装器 60 文件哈希、升级、卸载与个人数据保留通过。两仓已从 `codex/board-runtime-logs` 快进合入 master 并推送：LanChat [`e99ab22`](https://github.com/Nagi-226/LanChat-Next/commit/e99ab220e63e58bc0abcd43654ac1033f58b8aad)、Console [`aebe932`](https://github.com/Nagi-226/RoboMind_Console/commit/aebe9323503ff1f9f7d47f4f61aea1a7f6d413b1)；既有 legacy / 工具 WIP 保留。
+
+同日样式、默认自动跟随与窗口图标 / Windows 原生窗口修复也已纳入，Qt 14/14 通过。实际拖拽吸附、Snap 悬停面板和多屏操作仍待实机确认；详见 [窗口操作与验证范围](window-behavior.md)。README 的界面预览使用示例日志。
 
 下一阶段仍为异地两机验收与外部模型方案。USB 日志采集开始前或断开期间的输出无法补取；纯 Wi-Fi 结构化日志上行、远程连续日志订阅为后续事项，不能把当前本地日志文件作为远程订阅接口。
