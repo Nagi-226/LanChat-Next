@@ -131,7 +131,7 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 
 2026-11-22 安装验收通过：`scripts/test-windows-installer.ps1` 使用实际安装器和独立目录，核对 59 个文件、快捷方式、安装目录中的 Qt / 服务端双客户端 LAN 测试、重复安装、卸载及个人文件保留。测试探针另需 `-TestClientPath` 与 `-QtTestDllPath`，QtTest 不随正式安装器分发；已注册该安装器或已有开始菜单组的用户需要换一个干净 Windows 用户运行验收脚本。两个物理 PC 的联机验收仍待测试者配合。
 
-2026.11.23.1 安装验收可传 `-AiStatusToolPath ../RoboMind-Console/tools/test_ai_status_chat.py` 和 `-PythonPath <Python 可执行文件>`，在移除开发 Qt PATH 后测试安装目录中的 Console 两种模型接口。使用本机模拟服务和临时账号，不调用付费模型。
+2026.11.23.1 实际安装验收通过：**60 个文件**哈希与快捷方式、安装目录 Qt / 服务端双客户端通信、Console 两种 AI 接口、重复安装、卸载及个人数据保留。移除开发 Qt PATH 后使用本机模型模拟器和临时账号，没有新增付费调用。复验可传 `-AiStatusToolPath ../RoboMind-Console/tools/test_ai_status_chat.py` 与 `-PythonPath <Python 可执行文件>`；包内容与哈希见[本次发布记录](docs/windows-release-20261123.md)。
 
 ### 服务端
 
