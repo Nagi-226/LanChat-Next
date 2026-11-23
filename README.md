@@ -131,6 +131,8 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 
 2026-11-22 安装验收通过：`scripts/test-windows-installer.ps1` 使用实际安装器和独立目录，核对 59 个文件、快捷方式、安装目录中的 Qt / 服务端双客户端 LAN 测试、重复安装、卸载及个人文件保留。测试探针另需 `-TestClientPath` 与 `-QtTestDllPath`，QtTest 不随正式安装器分发；已注册该安装器或已有开始菜单组的用户需要换一个干净 Windows 用户运行验收脚本。两个物理 PC 的联机验收仍待测试者配合。
 
+2026.11.23.1 安装验收可传 `-AiStatusToolPath ../RoboMind-Console/tools/test_ai_status_chat.py` 和 `-PythonPath <Python 可执行文件>`，在移除开发 Qt PATH 后测试安装目录中的 Console 两种模型接口。使用本机模拟服务和临时账号，不调用付费模型。
+
 ### 服务端
 
 服务端由仓库根 CMake 构建，运行参数使用 `--port` 和 `--data`。本机托管模式启动或复用 sidecar；远程模式仅连接所填主机；默认数据目录为 `%APPDATA%\LanChat-Next\data`。

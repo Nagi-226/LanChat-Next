@@ -6,6 +6,7 @@
     [string]$BoardLogProbePath='',
     [string]$BoardLogToolPath='',
     [string]$PythonPath='',
+    [string]$AiStatusToolPath='',
     [string]$BoardLogPort='',
     [string]$TestRoot=''
 )
@@ -65,6 +66,11 @@ try {
         $env:QT_QPA_PLATFORM='offscreen'
         & $probe --server (Join-Path $destination 'lanchat_server_next.exe') 2>&1 | Out-File -LiteralPath (Join-Path $run 'runtime.log') -Encoding utf8
         if($LASTEXITCODE -ne 0){throw "Installed Qt/server LAN test failed: $LASTEXITCODE"}
+        if($AiStatusToolPath){
+            if(-not $PythonPath){throw 'Supply PythonPath for the installed AI mock test.'}
+            & $PythonPath $AiStatusToolPath --console (Join-Path $destination 'robomind-console\RoboMindConsole.exe') 2>&1 | Out-File -LiteralPath (Join-Path $run 'ai-mock-runtime.log') -Encoding utf8
+            if($LASTEXITCODE -ne 0){throw "Installed Console AI mock test failed: $LASTEXITCODE"}
+        }
         if($BoardLogPort){
             if(-not $BoardLogProbePath -or -not $BoardLogToolPath -or -not $PythonPath){throw 'Supply the board log probe, tool and Python paths for USB installer validation.'}
             $logProbe=Join-Path $destination 'installer-log-probe.exe'
@@ -88,7 +94,7 @@ try {
     if($process.ExitCode -ne 0){throw "Uninstall failed: $($process.ExitCode)"}
     if((Test-Path -LiteralPath $registry) -or (Test-Path -LiteralPath $shortcut) -or (Test-Path -LiteralPath (Join-Path $destination 'lanchat_qt.exe'))){throw 'Uninstall left its registration, shortcut or program executable.'}
     if([IO.File]::ReadAllText($marker) -ne 'preserve-user-data'){throw 'Uninstall lost personal data.'}
-    [ordered]@{result='PASS';installer_sha256=$manifest.setup_sha256;payload_files=@($manifest.files).Count;installed_runtime_lan_test='PASS';reinstall='PASS';uninstall='PASS';personal_data_preserved=$true;logs=$run} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $run 'result.json') -Encoding utf8
+    [ordered]@{result='PASS';installer_sha256=$manifest.setup_sha256;payload_files=@($manifest.files).Count;installed_runtime_lan_test='PASS';installed_ai_mock_test=$(if($AiStatusToolPath){'PASS'}else{'not_run'});reinstall='PASS';uninstall='PASS';personal_data_preserved=$true;logs=$run} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $run 'result.json') -Encoding utf8
     Write-Host "PASS actual installer: payload, shortcut, installed Qt/server LAN test, reinstall, uninstall and data preservation. Logs: $run"
 } finally {
     # If a test fails after installation, remove only its own registration/files.
