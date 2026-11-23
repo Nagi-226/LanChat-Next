@@ -2,7 +2,7 @@
 
 面向可信公司局域网的桌面聊天应用，采用 **C++17 / Asio 服务端 + Qt6 Widgets 原生客户端**。在 RoboMind 系列中，同时提供告警送达和板端消息显示入口。
 
-> 当前状态：2026-11-23。Qt 原生客户端支持共享主机、群聊、PC 附件、设备查询、USB 日志和外部模型文字问答。工作区新增六组设置与 HTTP 429 分类 / 冷却，本机版本 **2026.11.23.2**，尚未提交 / 推送。已发布的 Windows 安装包仍为 **2026.11.23.1**，不含本轮扩展。普通 Unicode 表情作为文字发送；鲸鱼娘沉浸模式继续待办。
+> 当前状态：2026-11-23。Qt 原生客户端支持共享主机、群聊、PC 附件、设备查询、USB 日志和外部模型文字问答。主分支及 Windows 完整安装包更新为 **2026.11.23.2**，包含六组设置与 HTTP 429 分类 / 冷却，实际安装验收通过。普通 Unicode 表情作为文字发送；下次先联调用户自己的 DeepSeek 官方 API，鲸鱼娘沉浸模式继续待办。
 
 ## 当前能力
 
@@ -61,7 +61,7 @@ flowchart LR
 
 附件支持按钮选择、拖拽、剪贴板图片；接收后可预览图片/GIF、另存文件。默认单文件 100 MiB，服务器配额 5 GiB，客户端完整附件缓存约 512 MiB。暂停或断线后点击 **继续**，重启后未完成任务仍保留。
 
-Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.23.1-x64.exe`** 双击安装，随包带齐运行库，创建桌面 / 开始菜单入口并支持卸载。完整 ZIP 含安装器、安装 / 使用说明、连接信息和哈希清单，包含文字 AI 与登录后设置布局。跨网络测试先取得 Tailscale 组网访问权限；主机模型密钥不随包分发。
+Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.23.2-x64.exe`** 双击安装，随包带齐运行库，创建桌面 / 开始菜单入口并支持卸载。完整 ZIP 含安装器、安装 / 使用说明、连接信息和哈希清单，包含文字 AI、六组设置与调用限制。跨网络测试先取得 Tailscale 组网访问权限；主机模型密钥不随包分发。
 
 公司常开主机、Windows 防火墙、安装包 / ZIP、备份和限额：[局域网部署说明](docs/lan-deployment.md)。公司主机可独立后台运行，关闭聊天窗口后继续服务其他用户。
 
@@ -69,7 +69,7 @@ Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.23.1-x64.exe`** 双击
 
 在登录后的 **左下角齿轮 → 设置 → 板端连接 → AI 状态问答** 配置、启用模型并点击 **保存并连接**，再点击 **在聊天中询问板端状态**。私聊可直接自然提问，群聊用 `/AI 问题`，`/AI 清空` 清除当前会话模型上下文。感知 / 链路 / 设备和 `/日志` 仍使用原确定性查询。
 
-回答依据新的板端快照，完整回复留在 PC 聊天；语音与小智通用 AI 留后续。模型服务可能计费，密钥用 Windows DPAPI 加密保存；问题、状态摘要和最多三轮上下文提供给模型，图像、附件和完整日志不上传。聊天历史继续由 LanChat 保存。详见 [AI 状态问答说明](docs/ai-status-chat.md)和[设置扩展计划 / 小智架构说明](docs/settings-roadmap.md)。
+回答依据新的板端快照，完整回复留在 PC 聊天；语音与小智通用 AI 留后续。模型服务可能计费，密钥用 Windows DPAPI 加密保存；问题、状态摘要和最多三轮上下文提供给模型，图像、附件和完整日志不上传。聊天历史继续由 LanChat 保存。详见 [AI 状态问答说明](docs/ai-status-chat.md)和[设置使用 / 小智架构说明](docs/settings-roadmap.md)。
 
 ### 窗口操作
 
@@ -125,15 +125,15 @@ ctest --test-dir build-qt --output-on-failure
 
 ```powershell
 winget install --id JRSoftware.InnoSetup --exact --source winget
-.\scripts\package-lan.ps1 -OutputDirectory build/lan-distribution-20261123-ai-ui
-.\scripts\package-installer.ps1 -BundleDirectory build/lan-distribution-20261123-ai-ui/LanChat-Next -ReleaseVersion 2026.11.23.1
+.\scripts\package-lan.ps1 -OutputDirectory build/lan-distribution-20261123-settings
+.\scripts\package-installer.ps1 -BundleDirectory build/lan-distribution-20261123-settings/LanChat-Next -ReleaseVersion 2026.11.23.2
 ```
 
-输出在 `build/windows-installer-20261123-ai-ui/`，完整分发包为 `LanChat-Next-完整联机测试包-2026.11.23.1.zip`。可传 `-LanHostAddress` / `-TailscaleHostAddress` 写入测试主机地址；未传则提示向发起者索取。接收者只需运行安装 `.exe`，无需 Qt、Python、Node 或 PowerShell 安装脚本；Tailscale 按联网方式单独安装。安装器按当前用户安装，保留升级 / 卸载后的个人设置和数据；附中文联机说明与第三方运行库许可文本。
+输出在 `build/windows-installer-20261123-settings/`，完整分发包为 `LanChat-Next-完整联机测试包-2026.11.23.2.zip`。可传 `-LanHostAddress` / `-TailscaleHostAddress` 写入测试主机地址；未传则提示向发起者索取。接收者只需运行安装 `.exe`，无需 Qt、Python、Node 或 PowerShell 安装脚本；Tailscale 按联网方式单独安装。安装器按当前用户安装，保留升级 / 卸载后的个人设置和数据；附中文联机说明与第三方运行库许可文本。
 
 2026-11-22 安装验收通过：`scripts/test-windows-installer.ps1` 使用实际安装器和独立目录，核对 59 个文件、快捷方式、安装目录中的 Qt / 服务端双客户端 LAN 测试、重复安装、卸载及个人文件保留。测试探针另需 `-TestClientPath` 与 `-QtTestDllPath`，QtTest 不随正式安装器分发；已注册该安装器或已有开始菜单组的用户需要换一个干净 Windows 用户运行验收脚本。两个物理 PC 的联机验收仍待测试者配合。
 
-2026.11.23.1 实际安装验收通过：**60 个文件**哈希与快捷方式、安装目录 Qt / 服务端双客户端通信、Console 两种 AI 接口、重复安装、卸载及个人数据保留。移除开发 Qt PATH 后使用本机模型模拟器和临时账号，没有新增付费调用。复验可传 `-AiStatusToolPath ../RoboMind-Console/tools/test_ai_status_chat.py` 与 `-PythonPath <Python 可执行文件>`；包内容与哈希见[本次发布记录](docs/windows-release-20261123.md)。
+2026.11.23.2 实际安装验收通过：**60 个文件**哈希与快捷方式、安装目录 Qt / 服务端双客户端通信、Console 两种 AI 接口、重复安装、卸载及个人数据保留。移除开发 Qt PATH 后使用本机模型模拟器和临时账号，没有新增付费调用。六组设置的实现回归 Qt **16/16**、最终布局 **3/3** 通过。复验可传 `-AiStatusToolPath ../RoboMind-Console/tools/test_ai_status_chat.py` 与 `-PythonPath <Python 可执行文件>`；包内容与哈希见[本次发布记录](docs/windows-release-20261123.md)。
 
 ### 服务端
 
