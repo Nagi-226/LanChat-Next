@@ -32,4 +32,5 @@ private:
     QPushButton* pause_;
     QJsonArray rows_;bool paused_=false,following_=true;qint64 cleared_=0,displayed_=0;
     bool rendering_=false,scrollScheduled_=false;
+    QString preferencesSignature_;
 };

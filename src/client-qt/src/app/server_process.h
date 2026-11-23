@@ -13,8 +13,12 @@ public:
     ~ServerProcess() override;
     void ensureRunning(quint16 port=12346,int maxAttachmentMb=100);
     void stop();
+    QString state() const {return state_;}
+signals:
+    void stateChanged(const QString& state);
 
 private:
     QProcess proc_;
     bool spawned_ = false;
+    QString state_="未托管本机消息主机";
 };

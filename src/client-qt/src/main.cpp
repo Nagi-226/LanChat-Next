@@ -14,6 +14,13 @@
 #include "ui/main_window.h"
 #include "ui/theme.h"
 #include "app/credentials.h"
+#include "app/preferences.h"
+#include "app/board_connection.h"
+#include "ui/settings_panel.h"
+#include "net/transfer_manager.h"
+#include <QPushButton>
+#include <QLabel>
+#include <QSaveFile>
 #include <QRegularExpression>
 
 int main(int argc, char** argv)
@@ -21,20 +28,31 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
     app.setApplicationName("LanChat-Qt");
     app.setOrganizationName("LanChat");
+    // 只读检查：不登录聊天、不启动主机、不提交生成请求，输出只有脱敏检测结论。
+    if(app.arguments().contains("--check-ai-models")){
+        BoardConnection bridge;Session session;TransferManager transfers(&session);SettingsPanel panel(&session,&bridge,&transfers);
+        auto* button=panel.findChild<QPushButton*>("aiEndpointCheck");button->click();QTimer timer;
+        QObject::connect(&timer,&QTimer::timeout,&app,[&]{if(button->isEnabled()){const auto text=panel.findChild<QLabel*>("settingsFeedback")->text();const auto args=app.arguments();const auto index=args.indexOf("--diagnostic-output");if(index>=0){QSaveFile output(args.value(index+1));if(output.open(QIODevice::WriteOnly)){output.write(text.toUtf8());output.commit();}}std::fprintf(stderr,"%s\n",qPrintable(text));app.quit();}});timer.start(100);QTimer::singleShot(15000,&app,&QApplication::quit);return app.exec();
+    }
     // Local setup helper: import an authorized API configuration without printing its secret.
     if(app.arguments().contains("--import-ai-env")){
-        const QString key=qEnvironmentVariable("ANTHROPIC_AUTH_TOKEN",qEnvironmentVariable("ANTHROPIC_API_KEY"));
-        const QString url=qEnvironmentVariable("ANTHROPIC_BASE_URL");QString model=qEnvironmentVariable("ANTHROPIC_MODEL");
+        const QString provider=qEnvironmentVariable("ROBOMIND_AI_PROVIDER","anthropic");
+        const QString fallbackKey=provider=="anthropic"?qEnvironmentVariable("ANTHROPIC_AUTH_TOKEN",qEnvironmentVariable("ANTHROPIC_API_KEY")):qEnvironmentVariable("OPENAI_API_KEY");
+        const QString key=qEnvironmentVariable("ROBOMIND_AI_KEY",fallbackKey);
+        const QString url=qEnvironmentVariable("ROBOMIND_AI_ENDPOINT",qEnvironmentVariable(provider=="anthropic"?"ANTHROPIC_BASE_URL":"OPENAI_BASE_URL"));
+        QString model=qEnvironmentVariable("ROBOMIND_AI_MODEL",qEnvironmentVariable(provider=="anthropic"?"ANTHROPIC_MODEL":"OPENAI_MODEL"));
+        const QString effort=qEnvironmentVariable("ROBOMIND_AI_REASONING_EFFORT");
         model.remove(QRegularExpression("\\[1m\\]$"));const auto secret=credentials::encryptSecret(key);
-        if(key.isEmpty()||url.isEmpty()||model.isEmpty()||secret.isEmpty())return 2;
-        QSettings settings;settings.setValue("board_ai/enabled",true);settings.setValue("board_ai/provider","anthropic");
-        settings.setValue("board_ai/endpoint",url);settings.setValue("board_ai/model",model);settings.setValue("board_ai/secret",secret);settings.sync();
+        if((provider!="anthropic"&&provider!="openai")||key.isEmpty()||url.isEmpty()||model.isEmpty()||secret.isEmpty())return 2;
+        QSettings settings;settings.setValue("board_ai/enabled",true);settings.setValue("board_ai/provider",provider);
+        settings.setValue("board_ai/endpoint",url);settings.setValue("board_ai/model",model);settings.setValue("board_ai/secret",secret);
+        settings.setValue("board_ai/reasoning_effort",effort);settings.sync();
         return settings.status()==QSettings::NoError?0:3;
     }
     // 运行时窗口/任务栏图标。exe 的文件图标由 resources/app.rc 嵌进 PE 资源，
     // 两者是两处独立来源：改了图标要同时换 .ico（PE）与 .png（这份）。
     app.setWindowIcon(QIcon(":/icons/lanchat-256.png"));
-    app.setStyleSheet(theme::stylesheet());
+    app.setApplicationVersion("2026.11.23.2");preferences::applyDisplay();
 
     ServerProcess server;
     QSettings settings;
@@ -46,9 +64,12 @@ int main(int argc, char** argv)
     Session sess;
     Store store;
     MainWindow w(&sess, &store, &dev);
+    w.setHostState(hosted?server.state():"连接远程消息主机；本机不托管聊天服务。");
+    QObject::connect(&server,&ServerProcess::stateChanged,&w,&MainWindow::setHostState);
     w.show();
     QObject::connect(&w,&MainWindow::connectionRequested,&app,[&](const QString& host,quint16 selectedPort,bool local,int maximum){
         server.stop();if(local)server.ensureRunning(selectedPort,maximum);sess.connectToServer(host,selectedPort);
+        if(!local)w.setHostState("连接远程消息主机；本机不托管聊天服务。");
     });
     sess.connectToServer(hosted?QString("127.0.0.1"):settings.value("network/host","127.0.0.1").toString(),port);
 

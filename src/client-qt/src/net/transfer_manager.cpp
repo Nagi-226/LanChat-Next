@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QUuid>
 #include <QRegularExpression>
+#include <QSaveFile>
 
 namespace {
 QString digest(const QString& path) {
@@ -56,7 +57,7 @@ QString TransferManager::upload(const QString& path,int to,int gid) {
     tasks_.insert(t.id,t);persist();emit changed();request(t.id,"begin");return t.id;
 }
 QString TransferManager::download(const QJsonObject& a) {
-    QString cached=cachedPath(a);if(!cached.isEmpty()){emit downloaded(a.value("attachment_id").toString(),cached);return {};}
+    QString cached=cachedPath(a);if(!cached.isEmpty()){emit downloaded(a.value("attachment_id").toString(),exportDownload(cached));return {};}
     const auto aid=a.value("attachment_id").toString();
     if(!QRegularExpression("^[A-Za-z0-9-]{1,80}$").match(aid).hasMatch()) {emit error("附件标识无效");return {};}
     for(const auto& t:tasks_) if(!t.upload&&t.attachmentId==aid){resume(t.id);return t.id;}
@@ -106,7 +107,7 @@ void TransferManager::response(const QJsonObject& o) {
         if(t.offset==t.size) {
             if(digest(t.path+".part")!=t.hash){QFile::remove(t.path+".part");t.offset=0;t.active=false;t.state="校验失败，请重试";}
             else if(!QFile::rename(t.path+".part",t.path)){t.active=false;t.state="无法保存完整附件";}
-            else {t.active=false;t.state="已完成";emit downloaded(t.attachmentId,t.path);pruneCache();}
+            else {t.active=false;t.state="已完成";emit downloaded(t.attachmentId,exportDownload(t.path));pruneCache();}
             persist();emit changed();
         } else request(id,"download");
     }
@@ -141,7 +142,25 @@ void TransferManager::restore() {
 void TransferManager::pruneCache() {
     auto files=QDir(cacheRoot()).entryInfoList(QDir::Files,QDir::Time|QDir::Reversed);qint64 total=0;
     for(auto f:files) if(!f.fileName().endsWith(".part"))total+=f.size();
-    for(auto f:files) {if(total<=512LL*1024*1024)break;if(f.fileName().endsWith(".part"))continue;
+    const auto limit=qBound(64,QSettings().value("preferences/cache_mb",512).toInt(),4096)*1024LL*1024;
+    for(auto f:files) {if(total<=limit)break;if(f.fileName().endsWith(".part"))continue;
         bool used=false;for(const auto& t:tasks_)if(t.path==f.absoluteFilePath() && t.active)used=true;
-        if(!used&&QFile::remove(f.absoluteFilePath()))total-=f.size();}
+        if(!used&&!f.isSymLink()&&QFile::moveToTrash(f.absoluteFilePath()))total-=f.size();}
 }
+QString TransferManager::downloadDirectory(){return QSettings().value("preferences/download_directory",QStandardPaths::writableLocation(QStandardPaths::DownloadLocation)+"/LanChat").toString();}
+QString TransferManager::exportDownload(const QString& path){
+    const auto directory=downloadDirectory();if(!QDir().mkpath(directory)){emit error("下载已完成，但无法写入默认下载目录，文件保留在缓存中。");return path;}
+    QString target=QDir(directory).absoluteFilePath(QFileInfo(path).fileName());
+    if(QFileInfo::exists(target)){if(digest(target)==digest(path))return target;target=QDir(directory).absoluteFilePath(QUuid::createUuid().toString(QUuid::WithoutBraces)+"-"+QFileInfo(path).fileName());}
+    QFile source(path);QSaveFile output(target);bool ok=source.open(QIODevice::ReadOnly)&&output.open(QIODevice::WriteOnly);
+    while(ok&&!source.atEnd()){const auto bytes=source.read(64*1024);ok=!bytes.isEmpty()&&output.write(bytes)==bytes.size();}
+    if(ok&&output.commit())return target;
+    emit error("下载已完成，但复制到下载目录失败，文件保留在缓存中。");return path;
+}
+bool TransferManager::autoDownload(const QJsonObject& a){
+    QSettings settings;const auto size=a.value("file_size").toVariant().toLongLong();const auto kind=a.value("content_type").toString();
+    if(!settings.value("preferences/auto_download_images",false).toBool()||size<0||size>settings.value("preferences/auto_download_mb",10).toLongLong()*1024*1024||(!QStringList{"image","sticker"}.contains(kind)&&!QStringList{"png","jpg","jpeg","gif","webp","bmp"}.contains(QFileInfo(a.value("file_name").toString()).suffix().toLower())))return false;
+    download(a);return true;
+}
+qint64 TransferManager::cacheBytes()const{qint64 size=0;for(const auto& file:QDir(cacheRoot()).entryInfoList(QDir::Files))if(!file.isSymLink())size+=file.size();return size;}
+int TransferManager::clearCache(){int count=0;for(const auto& file:QDir(cacheRoot()).entryInfoList(QDir::Files)){if(file.isSymLink()||file.fileName().endsWith(".part"))continue;bool active=false;for(const auto& t:tasks_)if(t.active&&t.path==file.absoluteFilePath())active=true;if(!active&&QFile::moveToTrash(file.absoluteFilePath()))++count;}emit changed();return count;}

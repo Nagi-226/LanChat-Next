@@ -26,15 +26,20 @@ class RegisterView;
 class ChatView;
 class ContactsPanel;
 class MembersPanel;
+class SettingsPanel;
+class QSystemTrayIcon;
+class QCloseEvent;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent = nullptr);
+    ~MainWindow() override;
     // UI 预览 hook：注入演示数据并直跳主界面（供 --demo 截图，不联网）
     // openBoard=true 时打开板端会话，供告警卡片目检
     void loadDemoData(bool withMessages = true, bool openBoard = false);
     void showBoardConnection();
+    void setHostState(const QString& state);
 
 signals:
     void connectionRequested(const QString& host,quint16 port,bool hosted,int maxAttachmentMb);
@@ -44,11 +49,16 @@ protected:
     void showEvent(QShowEvent* event) override;
     void changeEvent(QEvent* event) override;
     bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     void showConnectionSettings();
     void showSettings();
     void ensureSettingsPage();
+    void showExtendedSettings(int section);
+    void logoutAccount();
+    void applyPreferences();
+    void notify(const QString& title,const QString& text,bool test=false);
     bool configureLoginConnection(const QString& address);
     void changeConnection(const QString& host,quint16 port,bool hosted,int maxAttachmentMb);
     void renderConversation();
@@ -81,6 +91,10 @@ private:
     DevMode* dev_;
     BoardConnection* bridge_;
     BoardConnectionPanel* boardPanel_=nullptr;
+    SettingsPanel* extendedSettings_=nullptr;
+    QSystemTrayIcon* tray_=nullptr;
+    QString hostState_="消息主机状态待确认";
+    bool quitting_=false;
     QWidget* settingsPage_=nullptr;
     QStackedWidget* settingsStack_=nullptr;
     QWidget* serverPage_=nullptr;

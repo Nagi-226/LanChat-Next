@@ -21,6 +21,10 @@ public:
     void cancel(const QString& id);
     QString cachedPath(const QJsonObject& attachment) const;
     QList<TransferTask> tasks() const { return tasks_.values(); }
+    bool autoDownload(const QJsonObject& attachment);
+    qint64 cacheBytes() const;
+    int clearCache();
+    static QString downloadDirectory();
 signals:
     void changed();
     void error(const QString& message);
@@ -33,6 +37,7 @@ private:
     void pruneCache();
     QString cacheRoot() const;
     QString scope() const;
+    QString exportDownload(const QString& path);
     Session* session_;
     QHash<QString,TransferTask> tasks_;
     int owner_=0;

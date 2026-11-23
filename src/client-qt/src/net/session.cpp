@@ -7,6 +7,7 @@
 
 Session::Session(QObject* parent) : QObject(parent)
 {
+    connect(this,&Session::stateChanged,this,[this](const QString& state){connectionState_=state;});
     connect(&sock_, &QTcpSocket::connected, this, &Session::onConnected);
     connect(&sock_, &QTcpSocket::disconnected, this, &Session::onDisconnected);
     connect(&sock_, &QTcpSocket::errorOccurred, this, &Session::onError);

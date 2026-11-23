@@ -35,6 +35,7 @@ public:
 
     int selfId() const { return selfId_; }
     QString selfNick() const { return selfNick_; }
+    QString state() const {return connectionState_;}
 
 signals:
     void ready(int uid, const QString& nick);
@@ -73,6 +74,7 @@ private:
     bool wantConnected_ = false;
     int selfId_ = 0;
     QString selfNick_;
+    QString connectionState_="未连接";
     QString pendingUser_;
     QString pendingPass_;
     bool pendingIsNumeric_ = false;

@@ -27,6 +27,9 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
     cfg_.aiProvider = s.value("board_ai/provider","anthropic").toString();
     cfg_.aiEndpoint = s.value("board_ai/endpoint",QString()).toString();
     cfg_.aiModel = s.value("board_ai/model",QString()).toString();
+    cfg_.aiReasoningEffort = s.value("board_ai/reasoning_effort",QString()).toString();
+    cfg_.aiMaxTokens=s.value("board_ai/max_tokens",1200).toInt();cfg_.aiTimeoutSeconds=s.value("board_ai/timeout_seconds",45).toInt();
+    cfg_.aiDailyLimit=s.value("board_ai/daily_limit",100).toInt();cfg_.aiIntervalSeconds=s.value("board_ai/interval_seconds",2).toInt();cfg_.aiConcurrency=s.value("board_ai/concurrency",4).toInt();
     cfg_.aiKey = credentials::decryptSecret(s.value("board_ai/secret").toByteArray());
     cfg_.listenPort = static_cast<quint16>(s.value("board_bridge/listen_port", 9000).toUInt());
     cfg_.serverHost = s.value("board_bridge/server_host", "127.0.0.1").toString();
@@ -62,7 +65,8 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
             [this](int code, QProcess::ExitStatus) {
         status_ = {};
         poll_.stop();
-        if (!stopping_) setState(QString("Console 已退出（%1），可重新连接").arg(code));
+        if (!stopping_) {setState(QString("Console 已退出（%1），可重新连接").arg(code));
+            if(wantRunning_&&QSettings().value("preferences/bridge_reconnect",true).toBool())QTimer::singleShot(5000,this,[this]{if(wantRunning_)start();});}
     });
     // 消费进程输出，避免长时间运行时缓存增长；状态来自原子文件快照。
     connect(&proc_, &QProcess::readyReadStandardOutput, this, [this] { proc_.readAllStandardOutput(); });
@@ -93,6 +97,9 @@ void BoardConnection::saveConfig()
     s.setValue("board_ai/provider",cfg_.aiProvider);
     s.setValue("board_ai/endpoint",cfg_.aiEndpoint);
     s.setValue("board_ai/model",cfg_.aiModel);
+    s.setValue("board_ai/reasoning_effort",cfg_.aiReasoningEffort);
+    s.setValue("board_ai/max_tokens",cfg_.aiMaxTokens);s.setValue("board_ai/timeout_seconds",cfg_.aiTimeoutSeconds);s.setValue("board_ai/daily_limit",cfg_.aiDailyLimit);
+    s.setValue("board_ai/interval_seconds",cfg_.aiIntervalSeconds);s.setValue("board_ai/concurrency",cfg_.aiConcurrency);
     s.setValue("board_ai/secret",credentials::encryptSecret(cfg_.aiKey));
     s.setValue("board_bridge/listen_port", cfg_.listenPort);
     s.setValue("board_bridge/server_host", cfg_.serverHost);
@@ -108,6 +115,7 @@ void BoardConnection::saveConfig()
 
 void BoardConnection::start()
 {
+    wantRunning_=true;
     if (running()) return;
     if (!QFile::exists(cfg_.consolePath)) { setState("缺少 Console 桥，请重新部署或选择 Console 程序"); return; }
     if (cfg_.listenPort == 0 || cfg_.serverPort == 0 || cfg_.target < 0 || cfg_.groupId < 0) {
@@ -174,7 +182,11 @@ void BoardConnection::launchConsole()
     env.insert("ROBOMIND_AI_PROVIDER",cfg_.aiProvider);
     env.insert("ROBOMIND_AI_ENDPOINT",cfg_.aiEndpoint);
     env.insert("ROBOMIND_AI_MODEL",cfg_.aiModel);
+    env.insert("ROBOMIND_AI_REASONING_EFFORT",cfg_.aiReasoningEffort);
     env.insert("ROBOMIND_AI_KEY",cfg_.aiKey);
+    env.insert("ROBOMIND_AI_MAX_TOKENS",QString::number(cfg_.aiMaxTokens));env.insert("ROBOMIND_AI_TIMEOUT_SECONDS",QString::number(cfg_.aiTimeoutSeconds));
+    env.insert("ROBOMIND_AI_DAILY_LIMIT",QString::number(cfg_.aiDailyLimit));env.insert("ROBOMIND_AI_INTERVAL_SECONDS",QString::number(cfg_.aiIntervalSeconds));
+    env.insert("ROBOMIND_AI_CONCURRENCY",QString::number(cfg_.aiConcurrency));env.insert("ROBOMIND_AI_USAGE_FILE",profileDir_+"/ai-usage.json");
     proc_.setProcessEnvironment(env);
     proc_.setWorkingDirectory(profileDir_);
     QStringList arguments={"--bridge", "--port", QString::number(cfg_.listenPort),
@@ -182,12 +194,14 @@ void BoardConnection::launchConsole()
     if(cfg_.logEnabled)arguments << "--log-port" << cfg_.logPort;
     proc_.start(cfg_.consolePath,arguments);
     status_ = {};
+    defaultPageApplied_=false;
     setState("正在启动 Console 桥…");
     poll_.start();
 }
 
 void BoardConnection::stop()
 {
+    wantRunning_=false;
     stopping_ = true;
     registering_ = false;
     registrationTimeout_.stop();
@@ -203,6 +217,8 @@ void BoardConnection::stop()
     setState("未启动");
     pollLogs();emit logsChanged();
 }
+
+void BoardConnection::applyPreferences(){defaultPageApplied_=false;pollStatus();}
 
 void BoardConnection::setDefaultRecipient(int uid)
 {
@@ -226,6 +242,12 @@ void BoardConnection::pollStatus()
         return;
     }
     status_ = object;
+    const auto display=object.value("display").toObject();
+    if(!object.value("board_connected").toBool())defaultPageApplied_=false;
+    const auto defaultPage=QSettings().value("preferences/board_default_page",QString()).toString();
+    if(!defaultPageApplied_&&display.value("terminal_ready").toBool()&&display.value("navigation").toBool()){
+        if(defaultPage.isEmpty()||navigate(defaultPage))defaultPageApplied_=true;
+    }
     if (!object.value("listening").toBool()) setState("监听失败：" + object.value("listen_error").toString());
     else setState(object.value("board_connected").toBool() ? "板端已连接" : "正在监听，等待板端");
     emit changed();

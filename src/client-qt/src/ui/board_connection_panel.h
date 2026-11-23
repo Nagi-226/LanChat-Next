@@ -29,7 +29,7 @@ private:
     QCheckBox* automatic_;
     QLineEdit* consolePath_;
     QCheckBox* aiEnabled_;
-    QComboBox* aiProvider_;
+    QComboBox *aiProvider_, *aiReasoningEffort_;
     QLineEdit *aiEndpoint_, *aiModel_, *aiKey_;
     QLabel* aiState_;
     Session* session_;

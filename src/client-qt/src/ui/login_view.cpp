@@ -72,3 +72,4 @@ void LoginView::showError(const QString& msg) { err_->setText(msg); }
 bool LoginView::rememberChecked() const { return remember_->isChecked(); }
 QString LoginView::serverAddress() const {return server_->text().trimmed();}
 void LoginView::setServerAddress(const QString& address) {server_->setText(address);}
+void LoginView::refreshSavedLogin(){const auto saved=credentials::load();user_->setText(saved.username);pass_->setText(saved.password);remember_->setChecked(saved.remembered);}

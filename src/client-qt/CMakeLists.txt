@@ -143,6 +143,7 @@ add_executable(lanchat_qt WIN32
     src/app/devmode.cpp
     src/app/credentials.cpp
     src/app/server_process.cpp
+    src/app/preferences.cpp
     src/net/transfer_manager.cpp
     src/app/board_connection.cpp
     src/ui/theme.cpp
@@ -153,6 +154,7 @@ add_executable(lanchat_qt WIN32
     src/ui/contacts_panel.cpp
     src/ui/members_panel.cpp
     src/ui/main_window.cpp
+    src/ui/settings_panel.cpp
     src/ui/board_connection_panel.cpp
     src/ui/board_logs_panel.cpp
     resources/resources.qrc
@@ -176,6 +178,14 @@ endif()
 add_test(NAME board_connection COMMAND lanchat_qt_test_board_connection)
 get_target_property(_client_sources lanchat_qt SOURCES)
 list(REMOVE_ITEM _client_sources src/main.cpp ${LANCHAT_WIN_RESOURCES})
+add_executable(lanchat_qt_test_settings tests/test_settings.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_settings PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_settings PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_settings PRIVATE crypt32 user32 dwmapi)
+endif()
+add_test(NAME settings COMMAND lanchat_qt_test_settings)
+set_tests_properties(settings PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
 add_executable(lanchat_qt_test_board_alerts tests/test_board_alerts.cpp ${_client_sources})
 target_include_directories(lanchat_qt_test_board_alerts PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt_test_board_alerts PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)

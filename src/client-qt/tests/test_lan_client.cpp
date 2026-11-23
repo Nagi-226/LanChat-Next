@@ -35,6 +35,7 @@ int main(int argc,char** argv){
     QFontDatabase::addApplicationFont("C:/Windows/Fonts/seguiemj.ttf");app.setFont(QFont("Microsoft YaHei"));
     app.setStyleSheet(theme::stylesheet()+"QWidget {font-family:'Microsoft YaHei';}");
     QTemporaryDir directory;assert(directory.isValid());QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,directory.path());
+    QSettings().setValue("preferences/download_directory",directory.path()+"/downloads");
     QTcpServer probe;assert(probe.listen(QHostAddress::LocalHost,0));auto port=probe.serverPort();probe.close();
     auto args=app.arguments();int serverArg=args.indexOf("--server");assert(serverArg>0);
     QProcess server;server.setWorkingDirectory(directory.path());server.start(args.value(serverArg+1),{"--port",QString::number(port),"--data",directory.path()+"/data"});assert(server.waitForStarted());
@@ -62,6 +63,8 @@ int main(int argc,char** argv){
     QSignalSpy downloaded(tb,&TransferManager::downloaded);auto download=tb->download(attachment);assert(!download.isEmpty());
     tb->pause(download);tb->resume(download);assert(wait([&]{return downloaded.size()==1;}));
     QFile saved(downloaded[0][1].toString());assert(saved.open(QIODevice::ReadOnly));assert(saved.readAll()==bytes);
+    assert(downloaded[0][1].toString().startsWith(directory.path()+"/downloads/"));
+    assert(QFileInfo::exists(tb->cachedPath(attachment)));
     // Clipboard PNG traverses the actual widget event, client transfer manager and server.
     QImage image(240,120,QImage::Format_RGB32);image.fill(QColor("#65abf3"));QApplication::clipboard()->setImage(image);
     auto* input=chatA->findChild<QLineEdit*>();assert(input);QTest::keyClick(input,Qt::Key_V,Qt::ControlModifier);
@@ -87,6 +90,8 @@ int main(int argc,char** argv){
     QString resumeId;
     {TransferManager temporary(&a);emit a.ready(a.selfId(),a.selfNick());resumeId=temporary.upload(path,0,gid);temporary.pause(resumeId);}
     {TransferManager restored(&a);emit a.ready(a.selfId(),a.selfNick());bool found=false;for(auto t:restored.tasks())if(t.id==resumeId)found=true;assert(found);restored.cancel(resumeId);}
+    QSettings().setValue("preferences/auto_download_images",true);QImage automatic(60,40,QImage::Format_RGB32);automatic.fill(QColor("#fba27d"));const auto autoPath=directory.path()+"/automatic.png";assert(automatic.save(autoPath));const int downloadsBefore=downloaded.size();ta->upload(autoPath,0,gid);assert(wait([&]{return downloaded.size()>downloadsBefore;}));QImage loaded(downloaded.last()[1].toString());assert(!loaded.isNull()&&loaded.pixelColor(0,0)==QColor("#fba27d"));QSettings().setValue("preferences/auto_download_images",false);
+    const auto cachePath=tb->cachedPath(attachment);const auto partial=QFileInfo(cachePath).absolutePath()+"/unfinished.part";QFile part(partial);assert(part.open(QIODevice::WriteOnly));part.write("partial");part.close();tb->clearCache();assert(!QFileInfo::exists(cachePath));assert(QFileInfo::exists(partial));assert(QFileInfo::exists(saved.fileName()));
     a.logout();b.logout();server.kill();assert(server.waitForFinished(5000));
     qInfo("PASS real Qt clients: Unicode/plain text, join/list/members/history, file bytes, pause/resume, clipboard PNG, GIF preview, persistent tasks");
 }

@@ -25,7 +25,8 @@ public:
         QString logPort = "COM3";
         bool aiEnabled = false;
         QString aiProvider = "anthropic";
-        QString aiEndpoint, aiModel, aiKey;
+        QString aiEndpoint, aiModel, aiKey, aiReasoningEffort;
+        int aiMaxTokens=1200,aiTimeoutSeconds=45,aiDailyLimit=100,aiIntervalSeconds=2,aiConcurrency=4;
     };
     explicit BoardConnection(QObject* parent = nullptr, const QString& profileDir = {});
     ~BoardConnection() override;
@@ -40,6 +41,7 @@ public:
     QString profileDirectory() const { return profileDir_; }
     bool navigate(const QString& action,QString* requestId=nullptr);
     bool setLogCapture(bool enabled,const QString& port);
+    void applyPreferences();
     QJsonObject logSnapshot() const { return logSnapshot_; }
 signals:
     void changed();
@@ -67,4 +69,5 @@ private:
     QTimer logPoll_;
     bool registering_ = false;
     bool stopping_ = false;
+    bool wantRunning_=false,defaultPageApplied_=false;
 };

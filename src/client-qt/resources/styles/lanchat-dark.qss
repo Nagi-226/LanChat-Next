@@ -157,6 +157,7 @@ QPushButton[settingsNavigation="true"] { text-align: left; border: none; padding
 QPushButton[settingsNavigation="true"]:checked { background: #1A2436; color: #7FA3FF; }
 QFrame#settingsCard { background: #1D212A; border: 1px solid #272C37; border-radius: 12px; }
 QFrame#settingsCard QLabel, QWidget#settingsNavigation QLabel { background: transparent; }
+QFrame#settingsCard QCheckBox { background: transparent; }
 QWidget#alertRow { background-color: transparent; border-radius: 8px; }
 QWidget#alertRow:hover { background-color: #232833; }
 QLabel#alertText { font-size: 12px; color: #E7EAF0; }

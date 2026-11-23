@@ -116,9 +116,17 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     aiProvider_->setCurrentIndex(config.aiProvider=="openai"?1:0);
     aiEndpoint_=new QLineEdit(config.aiEndpoint,this);aiEndpoint_->setObjectName("boardAiEndpoint");aiEndpoint_->setPlaceholderText("例如 https://api.deepseek.com/anthropic");
     aiModel_=new QLineEdit(config.aiModel,this);aiModel_->setObjectName("boardAiModel");aiModel_->setPlaceholderText("服务商提供的模型名称");
+    aiReasoningEffort_=new QComboBox(this);aiReasoningEffort_->setObjectName("boardAiReasoningEffort");
+    aiReasoningEffort_->addItem("按模型默认","");aiReasoningEffort_->addItem("关闭思考（none）","none");
+    aiReasoningEffort_->addItem("低（low）","low");aiReasoningEffort_->addItem("中（medium）","medium");
+    aiReasoningEffort_->addItem("高（high）","high");aiReasoningEffort_->addItem("最高（max）","max");
+    aiReasoningEffort_->setCurrentIndex(qMax(0,aiReasoningEffort_->findData(config.aiReasoningEffort)));
+    aiReasoningEffort_->setEnabled(config.aiProvider=="openai");
+    connect(aiProvider_,&QComboBox::currentIndexChanged,this,[this]{aiReasoningEffort_->setEnabled(aiProvider_->currentData().toString()=="openai");});
+    aiReasoningEffort_->setToolTip("仅用于支持 reasoning_effort 的 OpenAI 兼容模型。商汤 deepseek-flash 选 none 可减少等待，避免思考占满输出上限。");
     aiKey_=new QLineEdit(this);aiKey_->setObjectName("boardAiKey");aiKey_->setEchoMode(QLineEdit::Password);
     aiKey_->setPlaceholderText(config.aiKey.isEmpty()?"输入 API 密钥":"密钥已加密保存，留空保留");
-    aiForm->addRow("接口协议",aiProvider_);aiForm->addRow("接口地址",aiEndpoint_);aiForm->addRow("模型",aiModel_);aiForm->addRow("API 密钥",aiKey_);layout->addLayout(aiForm);
+    aiForm->addRow("接口协议",aiProvider_);aiForm->addRow("接口地址",aiEndpoint_);aiForm->addRow("模型",aiModel_);aiForm->addRow("思考强度",aiReasoningEffort_);aiForm->addRow("API 密钥",aiKey_);layout->addLayout(aiForm);
     auto* aiHint=new QLabel("私聊专用板端账号可直接提问，例如「现在没检测到人是什么原因？」；群聊用 /AI 问题。\n每次刷新感知、链路和设备状态，不上传图像或完整日志。模型上下文最多三轮，仅留内存，10 分钟无活动清空；聊天记录按 LanChat 保存。模型服务可能计费。",this);
     aiHint->setWordWrap(true);aiHint->setStyleSheet("color:#8A94A4;background:transparent;");layout->addWidget(aiHint);
     aiState_=new QLabel(this);aiState_->setObjectName("boardAiState");aiState_->setWordWrap(true);layout->addWidget(aiState_);
@@ -203,6 +211,7 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
         config.consolePath = consolePath_->text();
         config.aiEnabled=aiEnabled_->isChecked();config.aiProvider=aiProvider_->currentData().toString();
         config.aiEndpoint=aiEndpoint_->text().trimmed();config.aiModel=aiModel_->text().trimmed();
+        config.aiReasoningEffort=aiReasoningEffort_->currentData().toString();
         if(!aiKey_->text().isEmpty())config.aiKey=aiKey_->text().trimmed();
         bridge_->configure(config);
         aiKey_->clear();aiKey_->setPlaceholderText(config.aiKey.isEmpty()?"输入 API 密钥":"密钥已加密保存，留空保留");

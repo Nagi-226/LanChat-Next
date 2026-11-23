@@ -16,6 +16,7 @@ public:
     bool rememberChecked() const;
     QString serverAddress() const;
     void setServerAddress(const QString& address);
+    void refreshSavedLogin();
 
 signals:
     void loginRequested(const QString& username, const QString& password);

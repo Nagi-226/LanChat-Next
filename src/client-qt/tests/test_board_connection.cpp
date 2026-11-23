@@ -43,6 +43,7 @@ int main(int argc, char** argv)
             file.write(QJsonDocument(QJsonObject{{"updated_ms", timestamp},
                 {"listening", true}, {"board_connected", true}, {"frames", 42},
                 {"board_peer", "192.0.2.3"}, {"decode_failures", 0},
+                {"display",QJsonObject{{"terminal_ready",true},{"navigation",true}}},
                 {"lanchat_state", "已登录"}}).toJson());
             if (!file.commit()) qFatal("fake Console status commit failed");
         });
@@ -87,13 +88,15 @@ int main(int argc, char** argv)
     config.serverPort = server.serverPort();
     config.target = 55;
     config.groupId = 9;
-    config.aiEnabled=true;config.aiEndpoint="https://example.com/anthropic";config.aiModel="test-model";config.aiKey="isolated-ai-secret";
+    config.aiEnabled=true;config.aiEndpoint="https://example.com/anthropic";config.aiModel="test-model";config.aiKey="isolated-ai-secret";config.aiReasoningEffort="none";
     bridge.configure(config);
+    QSettings().setValue("preferences/board_default_page","ppm");
     bridge.start();
     assert(waitFor([&] { return bridge.snapshot().value("frames").toInt() == 42; }));
     assert(registrations == 1);
     assert(bridge.config().accountId == 4242);
     assert(bridge.snapshot().value("board_connected").toBool());
+    const auto navigation=bridge.profileDirectory()+"/navigation.request";assert(waitFor([&]{return QFile::exists(navigation);}));QFile nav(navigation);assert(nav.open(QIODevice::ReadOnly));assert(QJsonDocument::fromJson(nav.readAll()).object().value("action").toString()=="ppm");nav.close();assert(QFile::remove(navigation));QThread::msleep(650);QCoreApplication::processEvents();assert(!QFile::exists(navigation));
     QSettings generated(bridge.profileDirectory() + "/robomind-console.ini", QSettings::IniFormat);
     assert(generated.value("lanchat/group_id").toInt() == 9);
     assert(generated.value("lanchat/target").toInt() == 55);
@@ -112,7 +115,7 @@ int main(int argc, char** argv)
     BoardConnection restored(nullptr, dir.path() + "/restored");
     assert(restored.config().accountId == 4242);
     assert(restored.config().password == registeredPassword);
-    assert(restored.config().aiEnabled&&restored.config().aiModel=="test-model"&&restored.config().aiKey=="isolated-ai-secret");
+    assert(restored.config().aiEnabled&&restored.config().aiModel=="test-model"&&restored.config().aiKey=="isolated-ai-secret"&&restored.config().aiReasoningEffort=="none");
 #endif
     bridge.start();
     const bool restarted = waitFor([&] { return bridge.snapshot().value("frames").toInt() == 42; });

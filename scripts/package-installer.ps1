@@ -1,14 +1,14 @@
 ﻿param(
     [Parameter(Mandatory=$true)][string]$BundleDirectory,
     [string]$OutputDirectory='',
-    [ValidatePattern('^\d{1,4}\.\d{1,2}\.\d{1,2}(\.\d{1,4})?$')][string]$ReleaseVersion='2026.11.23.1',
+    [ValidatePattern('^\d{1,4}\.\d{1,2}\.\d{1,2}(\.\d{1,4})?$')][string]$ReleaseVersion='2026.11.23.2',
     [string]$LanHostAddress='',
     [string]$TailscaleHostAddress='',
     [string]$IsccPath=''
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-if(-not $OutputDirectory){$OutputDirectory=Join-Path $root 'build\windows-installer-20261123-ai-ui'}
+if(-not $OutputDirectory){$OutputDirectory=Join-Path $root 'build\windows-installer-20261123-settings'}
 $bundle=(Resolve-Path -LiteralPath $BundleDirectory).Path
 if(-not $IsccPath){
     $candidates=@(
@@ -94,6 +94,8 @@ LanChat-Next $ReleaseVersion 联机测试连接信息
 询问板端状态时，发起者需提供专用板端账号或已配置群 ID。
 AI 接口由连接板子的桥接主机配置；分发包不含主机账号、密钥或日志。
 本版本包含文字状态 AI、长消息完整显示、关闭按钮红色悬停和登录后设置入口。
+登录后设置还包含账号与连接、通知与窗口、附件与存储、AI 与会话、显示与设备、关于与诊断。
+可设置关闭到托盘、开机启动、下载目录、字体与 AI 调用限制；HTTP 429 显示分类和冷却，不自动重试。
 "@ | Set-Content -LiteralPath (Join-Path $testkit '发给测试者-连接信息.txt') -Encoding utf8
 $zip=Join-Path $output "LanChat-Next-完整联机测试包-$ReleaseVersion.zip"
 Compress-Archive -LiteralPath @(Get-ChildItem -LiteralPath $testkit -File | ForEach-Object {$_.FullName}) -DestinationPath $zip

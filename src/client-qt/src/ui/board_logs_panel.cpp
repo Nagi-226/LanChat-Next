@@ -1,4 +1,5 @@
 #include "board_logs_panel.h"
+#include <QSettings>
 #include "app/board_connection.h"
 #include "net/session.h"
 #include <QApplication>
@@ -101,8 +102,8 @@ BoardLogsPanel::BoardLogsPanel(BoardConnection* bridge,Session* session,QWidget*
     connect(clear,&QPushButton::clicked,this,[this]{cleared_=bridge_->logSnapshot().value("status").toObject().value("sequence").toInteger();render();feedback_->setText("已清空本地视图；聊天查询的缓存保留。");});
     connect(copy,&QPushButton::clicked,this,[this]{QApplication::clipboard()->setText(filteredText());feedback_->setText("已复制当前筛选的脱敏日志。");});
     connect(exportLog,&QPushButton::clicked,this,[this]{const auto path=QFileDialog::getSaveFileName(this,"导出脱敏日志","LanChat-板端日志.txt","文本文件 (*.txt)");if(path.isEmpty())return;QSaveFile file(path);const auto bytes=filteredText().toUtf8();const bool ok=file.open(QIODevice::WriteOnly)&&file.write(bytes)==bytes.size()&&file.commit();feedback_->setText(ok?"已导出 UTF-8 脱敏日志。":"日志导出失败。");});
-    connect(level_,&QComboBox::currentIndexChanged,this,[this]{render();});connect(module_,&QComboBox::currentIndexChanged,this,[this]{render();});connect(search_,&QLineEdit::textChanged,this,[this]{render();});connect(raw_,&QCheckBox::toggled,this,[this]{render();});
-    connect(follow_,&QCheckBox::toggled,this,[this](bool checked){setFollowing(checked);});
+    connect(level_,&QComboBox::currentIndexChanged,this,[this]{QSettings().setValue("preferences/log_level",level_->currentData());render();});connect(module_,&QComboBox::currentIndexChanged,this,[this]{render();});connect(search_,&QLineEdit::textChanged,this,[this]{render();});connect(raw_,&QCheckBox::toggled,this,[this]{render();});
+    connect(follow_,&QCheckBox::toggled,this,[this](bool checked){QSettings().setValue("preferences/log_follow",checked);setFollowing(checked);});
     connect(logs_->verticalScrollBar(),&QScrollBar::actionTriggered,this,[this]{if(!rendering_)setFollowing(logs_->verticalScrollBar()->sliderPosition()==logs_->verticalScrollBar()->maximum());});
     connect(logs_->verticalScrollBar(),&QScrollBar::sliderMoved,this,[this](int position){if(!rendering_)setFollowing(position==logs_->verticalScrollBar()->maximum());});
     connect(logs_->verticalScrollBar(),&QScrollBar::sliderReleased,this,[this]{setFollowing(logs_->verticalScrollBar()->value()==logs_->verticalScrollBar()->maximum());});
@@ -139,6 +140,9 @@ bool BoardLogsPanel::eventFilter(QObject* watched,QEvent* event){
 }
 void BoardLogsPanel::query(const QString& command){const auto text=command.normalized(QString::NormalizationForm_KC).trimmed();if(!QStringList{"/日志","/日志 错误","/日志 链路","/日志 帮助"}.contains(text)){feedback_->setText("请使用四种日志查询命令之一。");return;}if(!session_||session_->selfId()<1||bridge_->config().accountId<1){feedback_->setText("请先登录并连接板端桥。");return;}session_->sendPrivate(bridge_->config().accountId,text);feedback_->setText("查询已提交，等待原会话回复。");}
 void BoardLogsPanel::refresh(){const auto snapshot=bridge_->logSnapshot(),status=snapshot.value("status").toObject();const QString state=status.value("state").toString();const bool fresh=bridge_->running()&&QDateTime::currentMSecsSinceEpoch()-status.value("updated_ms").toInteger()<2500;
+    QSettings settings;const auto level=settings.value("preferences/log_level","all").toString();const bool follow=settings.value("preferences/log_follow",true).toBool();
+    const auto signature=level+QString::number(follow)+QString::number(settings.value("preferences/font_scale",100).toInt());
+    if(signature!=preferencesSignature_){preferencesSignature_=signature;const QSignalBlocker blocker(level_);level_->setCurrentIndex(qMax(0,level_->findData(level)));setFollowing(follow);render();}
     const QString label=!fresh?"采集未运行 / 历史缓存":state=="running"?"USB 日志采集中":state=="busy"?"串口被占用，等待释放":state=="unavailable"?"USB 未接入或端口不可用":"采集已停止";
     source_->setText("● "+label+(status.value("port").toString().isEmpty()?QString():" · "+status.value("port").toString()));
     source_->setStyleSheet(QString("color:%1;font-weight:600;").arg(fresh&&state=="running"?"#a8dfba":"#dfb16c"));
@@ -165,7 +169,7 @@ void BoardLogsPanel::render(){const QScopedValueRollback<bool> rendering(renderi
     const auto rows=filteredRows();int index=0;
     for(const auto& value:rows){const auto row=value.toObject();const auto level=row.value("level").toString();const QColor color=level=="E"?QColor("#f296a0"):level=="W"?QColor("#e8bf76"):QColor("#dde2ed");
         if(index++)cursor.insertBlock();QTextBlockFormat paragraph;paragraph.setTopMargin(7);paragraph.setBottomMargin(7);paragraph.setLineHeight(130,QTextBlockFormat::ProportionalHeight);paragraph.setProperty(severityProperty,level);cursor.setBlockFormat(paragraph);
-        QTextCharFormat style;style.setFontFamilies({"Consolas","Microsoft YaHei"});style.setFontPointSize(10);style.setForeground(QColor("#8b93a7"));
+        QTextCharFormat style;style.setFontFamilies({"Consolas","Microsoft YaHei"});style.setFontPointSize(10*QSettings().value("preferences/font_scale",100).toInt()/100.0);style.setForeground(QColor("#8b93a7"));
         cursor.insertText(QDateTime::fromMSecsSinceEpoch(row.value("received_ms").toInteger()).toString("HH:mm:ss")+"  ",style);
         style.setForeground(level=="E"||level=="W"?color:QColor("#8fa5c2"));style.setFontWeight(QFont::Bold);cursor.insertText(level.leftJustified(3,' ')+" ",style);
         style.setFontWeight(QFont::Normal);style.setForeground(QColor("#91a8c9"));cursor.insertText(row.value("module").toString()+": ",style);

@@ -1,6 +1,8 @@
 #include "ui/main_window.h"
 
 #include "app/credentials.h"
+#include "app/preferences.h"
+#include "ui/settings_panel.h"
 #include "app/board_connection.h"
 #include "ui/board_connection_panel.h"
 #include "app/devmode.h"
@@ -41,6 +43,11 @@
 #include <QImage>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QCloseEvent>
+#include <QButtonGroup>
+#include <QApplication>
 #include "net/transfer_manager.h"
 
 #ifdef Q_OS_WIN
@@ -108,6 +115,11 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     buildMainPage();
     setCentralWidget(stack_);
     buildTitleBar();
+    tray_=new QSystemTrayIcon(QIcon(":/icons/lanchat-256.png"),this);tray_->setToolTip("LanChat-Next");
+    auto* trayMenu=new QMenu(this);trayMenu->addAction("打开 LanChat",this,[this]{showNormal();raise();activateWindow();});
+    trayMenu->addAction("退出 LanChat（本客户端启动的主机也会停止）",this,[this]{quitting_=true;close();});tray_->setContextMenu(trayMenu);
+    connect(tray_,&QSystemTrayIcon::activated,this,[this](QSystemTrayIcon::ActivationReason reason){if(reason==QSystemTrayIcon::DoubleClick||reason==QSystemTrayIcon::Trigger){showNormal();raise();activateWindow();}});
+    applyPreferences();
 
     connect(login_, &LoginView::registerRequested, this, [this] { if(configureLoginConnection(login_->serverAddress()))stack_->setCurrentWidget(reg_); });
     connect(login_,&LoginView::connectionRequested,this,[this](const QString& address){configureLoginConnection(address);});
@@ -193,6 +205,11 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
             unread_[key] = unread_.value(key, 0) + 1;
             refreshContacts();refreshGroups();
         }
+        if(m.fromId!=selfId_){
+            const bool foreground=matches&&isVisible()&&!isMinimized()&&isActiveWindow()&&stack_->currentIndex()==2;
+            if(preferences::shouldNotify(m.kind=="group",m.fromId==boardId_,foreground))notify(senderName(m.fromId),m.contentType=="text"?m.text:QString("收到附件：%1").arg(m.attachment.value("file_name").toString()));
+            if(m.contentType!="text")transfers_->autoDownload(m.attachment);
+        }
     });
     connect(sess_, &Session::presenceChanged, this, [this](int id, bool on) {
         store_->setOnline(id, on);
@@ -261,6 +278,12 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     auto* sc = new QShortcut(QKeySequence("Ctrl+Shift+D"), this);
     connect(sc, &QShortcut::activated, this, [this] { dev_->setEnabled(!dev_->enabled()); });
     connect(dev_, &DevMode::changed, this, [this](bool) { rebuildTitleBar(); });
+}
+
+MainWindow::~MainWindow(){
+    // 设置面板依赖传输管理器和桥。先停止桥并销毁面板，避免 QObject 按创建顺序
+    // 释放传输管理器后，桥的退出信号又让面板读取已经释放的对象。
+    bridge_->stop();if(settingsPage_){delete settingsPage_;settingsPage_=nullptr;extendedSettings_=nullptr;boardPanel_=nullptr;}
 }
 
 void MainWindow::buildMainPage()
@@ -589,6 +612,10 @@ void MainWindow::ensureSettingsPage() {
     serverSettingsBtn_=new QPushButton("服务器",navigation);serverSettingsBtn_->setObjectName("serverSettingsButton");
     boardSettingsBtn_=new QPushButton("板端连接",navigation);boardSettingsBtn_->setObjectName("boardConnectionButton");
     for(auto* button:{serverSettingsBtn_,boardSettingsBtn_}){button->setProperty("settingsNavigation",true);button->setCheckable(true);button->setCursor(Qt::PointingHandCursor);side->addWidget(button);}
+    auto* selection=new QButtonGroup(navigation);selection->setExclusive(true);selection->addButton(serverSettingsBtn_);selection->addButton(boardSettingsBtn_);
+    const QStringList sectionLabels={"账号与连接","通知与窗口","附件与存储","AI 与会话","显示与设备","关于与诊断"};
+    const QStringList sectionIds={"accountSettingsButton","notificationSettingsButton","storageSettingsButton","aiSettingsButton","displaySettingsButton","aboutSettingsButton"};
+    for(int i=0;i<sectionLabels.size();++i){auto* button=new QPushButton(sectionLabels[i],navigation);button->setObjectName(sectionIds[i]);button->setCheckable(true);button->setProperty("settingsNavigation",true);button->setCursor(Qt::PointingHandCursor);selection->addButton(button);side->insertWidget(i==0?3:side->count(),button);connect(button,&QPushButton::clicked,this,[this,i]{showExtendedSettings(i);});}
     side->addStretch();auto* back=new QPushButton("返回聊天",navigation);back->setObjectName("settingsReturnToChat");side->addWidget(back);
     settingsStack_=new QStackedWidget(settingsPage_);settingsStack_->setObjectName("settingsContents");layout->addWidget(navigation);layout->addWidget(settingsStack_,1);stack_->addWidget(settingsPage_);
     connect(back,&QPushButton::clicked,this,[this]{stack_->setCurrentIndex(selfId_>0?2:0);});
@@ -601,7 +628,34 @@ void MainWindow::ensureSettingsPage() {
 void MainWindow::showSettings() {
     if(selfId_<1)return;ensureSettingsPage();
     settingsPage_->findChild<QLabel*>("settingsAccountLabel")->setText(QString("已登录 · 账号 #%1").arg(selfId_));
-    showConnectionSettings();
+    showExtendedSettings(0);
+}
+void MainWindow::showExtendedSettings(int section){
+    if(selfId_<1)return;ensureSettingsPage();
+    if(!extendedSettings_){extendedSettings_=new SettingsPanel(sess_,bridge_,transfers_,settingsStack_);settingsStack_->addWidget(extendedSettings_);extendedSettings_->setHostState(hostState_);
+        connect(extendedSettings_,&SettingsPanel::logoutRequested,this,&MainWindow::logoutAccount);
+        connect(extendedSettings_,&SettingsPanel::reconnectRequested,this,[this]{QSettings s;const auto host=s.value("network/hosted",true).toBool()?QString("127.0.0.1"):s.value("network/host").toString();sess_->connectToServer(host,quint16(s.value("network/port",12346).toInt()));});
+        connect(extendedSettings_,&SettingsPanel::boardRequested,this,&MainWindow::showBoardConnection);
+        connect(extendedSettings_,&SettingsPanel::preferencesChanged,this,&MainWindow::applyPreferences);
+        connect(extendedSettings_,&SettingsPanel::testNotificationRequested,this,[this]{notify("LanChat 通知测试","这是一条本机测试通知。",true);});}
+    const QStringList ids={"accountSettingsButton","notificationSettingsButton","storageSettingsButton","aiSettingsButton","displaySettingsButton","aboutSettingsButton"};
+    settingsPage_->findChild<QPushButton*>(ids[section])->setChecked(true);extendedSettings_->setSection(section);settingsStack_->setCurrentWidget(extendedSettings_);stack_->setCurrentWidget(settingsPage_);
+}
+void MainWindow::setHostState(const QString& state){hostState_=state;if(extendedSettings_)extendedSettings_->setHostState(state);if(tray_)tray_->setToolTip("LanChat-Next\n"+state);}
+void MainWindow::applyPreferences(){if(tray_&&QSystemTrayIcon::isSystemTrayAvailable())tray_->show();if(!credentials::load().remembered)login_->refreshSavedLogin();}
+void MainWindow::notify(const QString& title,const QString& text,bool test){
+    if(tray_&&QSystemTrayIcon::isSystemTrayAvailable()){tray_->show();tray_->showMessage(title,text.left(180),QSystemTrayIcon::Information,5000);}
+    else if(test)QMessageBox::information(this,"通知测试","当前桌面未提供系统托盘，通知不可显示。Windows 正常桌面会使用托盘气泡。");
+    if(QSettings().value("preferences/sound",false).toBool())QApplication::beep();
+}
+void MainWindow::logoutAccount(){
+    sess_->logout();pendingPass_.clear();pendingUser_.clear();selfId_=0;contacts_->setAuthenticated(false);store_->clear();currentPeer_=0;currentIsGroup_=false;groups_.clear();groupMembers_.clear();historyCursors_.clear();unread_.clear();alerts_.clear();lastMsg_.clear();chat_->clear();refreshContacts();refreshGroups();refreshMembers();refreshAlerts();login_->refreshSavedLogin();stack_->setCurrentWidget(login_);
+}
+void MainWindow::closeEvent(QCloseEvent* event){
+    if(!quitting_&&QSettings().value("preferences/close_to_tray",false).toBool()&&QSystemTrayIcon::isSystemTrayAvailable()){hide();event->ignore();return;}
+    int pending=0;for(const auto& task:transfers_->tasks())if(task.state!="已完成")++pending;
+    if(pending>0&&QMessageBox::question(this,"退出 LanChat",QString("还有 %1 项未完成传输，退出后将暂停，下次可继续。确认退出？").arg(pending),QMessageBox::Yes|QMessageBox::No,QMessageBox::No)!=QMessageBox::Yes){quitting_=false;event->ignore();return;}
+    if(tray_)tray_->hide();event->accept();
 }
 void MainWindow::showConnectionSettings(){
     if(selfId_<1)return;ensureSettingsPage();
