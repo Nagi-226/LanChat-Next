@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QProcessEnvironment>
 #include <QSaveFile>
@@ -20,6 +21,8 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
         : profileDir;
     QSettings s;
     cfg_.autoStart = s.value("board_bridge/auto_start", false).toBool();
+    cfg_.logEnabled = s.value("board_bridge/log_enabled",false).toBool();
+    cfg_.logPort = s.value("board_bridge/log_port","COM3").toString();
     cfg_.listenPort = static_cast<quint16>(s.value("board_bridge/listen_port", 9000).toUInt());
     cfg_.serverHost = s.value("board_bridge/server_host", "127.0.0.1").toString();
     cfg_.serverPort = static_cast<quint16>(s.value("board_bridge/server_port", 12346).toUInt());
@@ -61,6 +64,7 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
     connect(&proc_, &QProcess::readyReadStandardError, this, [this] { proc_.readAllStandardError(); });
     poll_.setInterval(500);
     connect(&poll_, &QTimer::timeout, this, &BoardConnection::pollStatus);
+    logPoll_.setInterval(200);connect(&logPoll_,&QTimer::timeout,this,&BoardConnection::pollLogs);logPoll_.start();pollLogs();
 }
 
 BoardConnection::~BoardConnection() { stop(); }
@@ -78,6 +82,8 @@ void BoardConnection::saveConfig()
 {
     QSettings s;
     s.setValue("board_bridge/auto_start", cfg_.autoStart);
+    s.setValue("board_bridge/log_enabled",cfg_.logEnabled);
+    s.setValue("board_bridge/log_port",cfg_.logPort);
     s.setValue("board_bridge/listen_port", cfg_.listenPort);
     s.setValue("board_bridge/server_host", cfg_.serverHost);
     s.setValue("board_bridge/server_port", cfg_.serverPort);
@@ -137,6 +143,7 @@ void BoardConnection::launchConsole()
     QFile::remove(profileDir_ + "/stop.request");
     QFile::remove(profileDir_ + "/status.json");
     QFile::remove(profileDir_ + "/navigation.request");
+    QFile::remove(profileDir_ + "/logs.request");
     {
         QSettings ini(profileDir_ + "/robomind-console.ini", QSettings::IniFormat);
         ini.clear();
@@ -155,8 +162,10 @@ void BoardConnection::launchConsole()
     env.insert("ROBOMIND_LANCHAT_PASSWORD", cfg_.password);
     proc_.setProcessEnvironment(env);
     proc_.setWorkingDirectory(profileDir_);
-    proc_.start(cfg_.consolePath, {"--bridge", "--port", QString::number(cfg_.listenPort),
-        "--status-file", profileDir_ + "/status.json", "--stop-file", profileDir_ + "/stop.request"});
+    QStringList arguments={"--bridge", "--port", QString::number(cfg_.listenPort),
+        "--status-file", profileDir_ + "/status.json", "--stop-file", profileDir_ + "/stop.request"};
+    if(cfg_.logEnabled)arguments << "--log-port" << cfg_.logPort;
+    proc_.start(cfg_.consolePath,arguments);
     status_ = {};
     setState("正在启动 Console 桥…");
     poll_.start();
@@ -177,6 +186,7 @@ void BoardConnection::stop()
     stopping_ = false;
     status_ = {};
     setState("未启动");
+    pollLogs();emit logsChanged();
 }
 
 void BoardConnection::setDefaultRecipient(int uid)
@@ -214,6 +224,21 @@ QJsonObject BoardConnection::snapshot() const
 }
 
 void BoardConnection::setState(const QString& state) { state_ = state; emit changed(); }
+bool BoardConnection::setLogCapture(bool enabled,const QString& port){
+    if(enabled&&(port.trimmed().isEmpty()||port.size()>64))return false;
+    cfg_.logEnabled=enabled;cfg_.logPort=port.trimmed();saveConfig();
+    if(!running()){if(enabled)start();return enabled;}
+    QSaveFile file(profileDir_+"/logs.request");if(!file.open(QIODevice::WriteOnly))return false;
+    file.write(QJsonDocument(QJsonObject{{"action",enabled?"start":"stop"},{"port",cfg_.logPort},{"created_ms",QDateTime::currentMSecsSinceEpoch()}}).toJson(QJsonDocument::Compact));
+    return file.commit();
+}
+void BoardConnection::pollLogs(){
+    const QString path=profileDir_+"/logs/logs.snapshot.json";const auto modified=QFileInfo(path).lastModified().toMSecsSinceEpoch();if(modified==logFileModified_)return;
+    QFile file(path);if(file.size()>12*1024*1024||!file.open(QIODevice::ReadOnly))return;
+    const auto object=QJsonDocument::fromJson(file.readAll()).object();const auto updated=object.value("status").toObject().value("updated_ms").toInteger();
+    if(object.isEmpty()||updated==logUpdated_)return;
+    logFileModified_=modified;logUpdated_=updated;logSnapshot_=object;emit logsChanged();
+}
 bool BoardConnection::navigate(const QString& action,QString* requestId)
 {
     const auto display=snapshot().value("display").toObject();

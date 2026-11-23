@@ -53,6 +53,13 @@ QPushButton#icon {
     padding: 4px; min-width: 28px; max-height: 28px;
 }
 QPushButton#icon:hover { background-color: #232833; color: #E7EAF0; }
+/* 窗口控制：相同点击区域与矢量图标，右端无圆角和额外空隙。 */
+QPushButton[windowControl="true"] { background: transparent; border: none; border-radius: 0; padding: 0; }
+QPushButton[windowControl="true"]:hover, QPushButton[windowControl="true"][nativeHover="true"] { background: #232833; }
+QPushButton[windowControl="true"]:pressed { background: #2A3040; }
+QPushButton#windowCloseButton:hover { background: #C42B1C; }
+QPushButton#windowCloseButton:pressed { background: #A82418; }
+QPushButton[windowControl="true"]:focus { border: 1px solid #4C7DFF; }
 
 /* ── 列表/滚动区 ── */
 QListWidget, QListView, QTreeWidget, QTableView, QScrollArea {

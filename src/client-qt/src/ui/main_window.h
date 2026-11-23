@@ -40,8 +40,10 @@ signals:
     void connectionRequested(const QString& host,quint16 port,bool hosted,int maxAttachmentMb);
 
 protected:
-    void mousePressEvent(QMouseEvent* e) override;
-    void mouseMoveEvent(QMouseEvent* e) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
+    bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 
 private:
     void showConnectionSettings();
@@ -50,6 +52,10 @@ private:
     void refreshTransfers();
     void buildTitleBar();
     void rebuildTitleBar();
+    void updateWindowControls();
+    void toggleMaximized();
+    void configureNativeFrame();
+    void setMaximizeHover(bool hovered);
     void buildMainPage();
     void refreshContacts();
     void refreshGroups();
@@ -77,9 +83,11 @@ private:
     ChatView* chat_;
     ContactsPanel* contacts_;
     MembersPanel* members_;
-    QWidget* titleBar_;
+    QWidget* titleBar_=nullptr;
     QPushButton* consoleBtn_;
-    QPoint dragPos_;
+    QPushButton* maximizeBtn_=nullptr;
+    quintptr nativeFrameId_=0;
+    bool maximizePressed_=false;
     int selfId_ = 0;
     int currentPeer_ = 0;
     bool currentIsGroup_ = false;

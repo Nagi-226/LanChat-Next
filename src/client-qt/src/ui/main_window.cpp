@@ -19,6 +19,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <QGuiApplication>
+#include <QWindow>
+#include <QShowEvent>
+#include <QIconEngine>
+#include <QPainter>
+#include <QStyle>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSettings>
@@ -37,7 +43,35 @@
 #include <QUrl>
 #include "net/transfer_manager.h"
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#include <windowsx.h>
+#include <dwmapi.h>
+#endif
+
 namespace {
+enum class CaptionAction { Minimize, Maximize, Restore, Close };
+// 统一 12x12 逻辑像素的矢量画布，不依赖不同字体的 — / □ / × 字形。
+class CaptionIcon : public QIconEngine {
+public:
+    explicit CaptionIcon(CaptionAction action):action_(action){}
+    QIconEngine* clone() const override { return new CaptionIcon(action_); }
+    QPixmap pixmap(const QSize& size,QIcon::Mode mode,QIcon::State state) override {
+        QPixmap image(size);image.fill(Qt::transparent);QPainter painter(&image);paint(&painter,QRect(QPoint(),size),mode,state);return image;
+    }
+    void paint(QPainter* painter,const QRect& rect,QIcon::Mode,QIcon::State) override {
+        painter->save();painter->setRenderHint(QPainter::Antialiasing);painter->translate(rect.center()+QPointF(0.5,0.5));
+        painter->scale(rect.width()/12.0,rect.height()/12.0);painter->setPen(QPen(QColor("#e7eaf0"),1.2));painter->setBrush(Qt::NoBrush);
+        if(action_==CaptionAction::Minimize)painter->drawLine(QPointF(-5.25,0),QPointF(5.25,0));
+        else if(action_==CaptionAction::Maximize)painter->drawRect(QRectF(-5.25,-5.25,10.5,10.5));
+        else if(action_==CaptionAction::Close){painter->drawLine(QPointF(-5.25,-5.25),QPointF(5.25,5.25));painter->drawLine(QPointF(-5.25,5.25),QPointF(5.25,-5.25));}
+        else {painter->drawPolyline(QPolygonF{QPointF(-2.25,-2.25),QPointF(-2.25,-5.25),QPointF(5.25,-5.25),QPointF(5.25,2.25),QPointF(2.25,2.25)});painter->drawRect(QRectF(-5.25,-2.25,7.5,7.5));}
+        painter->restore();
+    }
+private:
+    CaptionAction action_;
+};
+QIcon captionIcon(CaptionAction action) { return QIcon(new CaptionIcon(action)); }
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
 // 连续消息分组：同发送者且间隔 < 5 分钟
 bool groupedWith(const QPair<int, qint64>& last, int from, qint64 ts)
@@ -50,7 +84,8 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
     : QMainWindow(parent), sess_(s), store_(st), dev_(dev), consoleBtn_(nullptr)
 {
     transfers_=new TransferManager(sess_,this);
-    setWindowFlags(Qt::FramelessWindowHint);
+    setWindowFlags(Qt::Window|Qt::FramelessWindowHint|Qt::WindowSystemMenuHint|Qt::WindowMinimizeButtonHint|Qt::WindowMaximizeButtonHint|Qt::WindowCloseButtonHint);
+    setWindowTitle("LanChat-Next");
     resize(1300, 800);
     // 板端账号：Console 桥登录用的那个 LanChat 账号 id；左栏齿轮可改，存 ini
     boardId_ = QSettings().value("board_account_id", 0).toInt();
@@ -243,14 +278,18 @@ void MainWindow::buildMainPage()
 void MainWindow::buildTitleBar()
 {
     titleBar_ = new QWidget(this);
+    titleBar_->setObjectName("windowTitleBar");
     titleBar_->setFixedHeight(40);
     titleBar_->setAttribute(Qt::WA_StyledBackground, true);
     titleBar_->setStyleSheet("background-color:#0E1014;");
     auto* lay = new QHBoxLayout(titleBar_);
-    lay->setContentsMargins(12, 0, 8, 0);
+    lay->setContentsMargins(12, 0, 0, 0);
     lay->setSpacing(4);
     auto* title = new QLabel("LanChat-Next", titleBar_);
     title->setObjectName("headerTitle");
+    title->setStyleSheet("background:transparent;");
+    title->setAttribute(Qt::WA_TransparentForMouseEvents);
+    titleBar_->installEventFilter(this);
     lay->addWidget(title);
     lay->addStretch(1);
     auto* network=new QPushButton("服务器",titleBar_);network->setObjectName("serverSettingsButton");
@@ -264,16 +303,17 @@ void MainWindow::buildTitleBar()
         board->setToolTip(bridge_->state());
     });
     lay->addWidget(board);
-    auto* min = new QPushButton("—", titleBar_);
-    auto* max = new QPushButton("□", titleBar_);
-    auto* close = new QPushButton("×", titleBar_);
-    for (auto* b : {min, max, close}) b->setObjectName("icon");
+    auto* controls=new QWidget(titleBar_);controls->setObjectName("windowCaptionButtons");controls->setStyleSheet("background:transparent;");
+    auto* controlLayout=new QHBoxLayout(controls);controlLayout->setContentsMargins(0,0,0,0);controlLayout->setSpacing(0);
+    auto* min = new QPushButton(controls);min->setObjectName("windowMinimizeButton");min->setIcon(captionIcon(CaptionAction::Minimize));min->setToolTip("最小化");min->setAccessibleName("最小化");
+    auto* max = new QPushButton(controls);max->setObjectName("windowMaximizeButton");maximizeBtn_=max;
+    auto* close = new QPushButton(controls);close->setObjectName("windowCloseButton");close->setIcon(captionIcon(CaptionAction::Close));close->setToolTip("关闭");close->setAccessibleName("关闭");
+    for (auto* b : {min, max, close}) {b->setProperty("windowControl",true);b->setFixedSize(46,40);b->setIconSize(QSize(12,12));controlLayout->addWidget(b);}
     connect(min, &QPushButton::clicked, this, [this] { showMinimized(); });
-    connect(max, &QPushButton::clicked, this, [this] { isMaximized() ? showNormal() : showMaximized(); });
+    connect(max, &QPushButton::clicked, this, &MainWindow::toggleMaximized);
     connect(close, &QPushButton::clicked, this, [this] { this->close(); });
-    lay->addWidget(min);
-    lay->addWidget(max);
-    lay->addWidget(close);
+    lay->addWidget(controls);
+    updateWindowControls();
     rebuildTitleBar();
     setMenuWidget(titleBar_);
 }
@@ -287,7 +327,7 @@ void MainWindow::rebuildTitleBar()
     if (dev_->enabled()) {
         consoleBtn_ = new QPushButton("Console", titleBar_);
         auto* lay = qobject_cast<QHBoxLayout*>(titleBar_->layout());
-        lay->insertWidget(lay->count() - 3, consoleBtn_);
+        lay->insertWidget(lay->count() - 1, consoleBtn_);
         connect(consoleBtn_, &QPushButton::clicked, this, [this] {
             QInputDialog::getText(this, "Developer Console", "state:", QLineEdit::Normal,
                                   "selfId=" + QString::number(selfId_), nullptr);
@@ -403,16 +443,82 @@ void MainWindow::openConversation(int id, bool isGroup)
     refreshMembers();if(sess_->selfId()>0){sess_->requestConversationHistory(id,isGroup);if(isGroup)sess_->requestMembers(id);}
 }
 
-void MainWindow::mousePressEvent(QMouseEvent* e)
-{
-    if (e->button() == Qt::LeftButton && titleBar_->geometry().contains(e->pos()))
-        dragPos_ = e->globalPosition().toPoint() - frameGeometry().topLeft();
+void MainWindow::updateWindowControls(){
+    if(!maximizeBtn_)return;const bool restored=isMaximized();maximizeBtn_->setProperty("captionAction",restored?"restore":"maximize");
+    maximizeBtn_->setIcon(captionIcon(restored?CaptionAction::Restore:CaptionAction::Maximize));
+    maximizeBtn_->setToolTip(restored?"还原":"最大化");maximizeBtn_->setAccessibleName(maximizeBtn_->toolTip());
 }
-
-void MainWindow::mouseMoveEvent(QMouseEvent* e)
-{
-    if (e->buttons() & Qt::LeftButton && !dragPos_.isNull())
-        move(e->globalPosition().toPoint() - dragPos_);
+void MainWindow::toggleMaximized(){
+#ifdef Q_OS_WIN
+    if(QGuiApplication::platformName()=="windows"){
+        const auto hwnd=reinterpret_cast<HWND>(winId());SendMessageW(hwnd,WM_SYSCOMMAND,IsZoomed(hwnd)?SC_RESTORE:SC_MAXIMIZE,0);return;
+    }
+#endif
+    isMaximized()?showNormal():showMaximized();
+}
+void MainWindow::changeEvent(QEvent* event){QMainWindow::changeEvent(event);if(event->type()==QEvent::WindowStateChange)updateWindowControls();}
+void MainWindow::showEvent(QShowEvent* event){QMainWindow::showEvent(event);configureNativeFrame();}
+bool MainWindow::eventFilter(QObject* watched,QEvent* event){
+    // 非 Windows 平台也使用窗口管理器的移动流程；Windows 走下面的原生 HTCAPTION。
+    if(watched==titleBar_&&event->type()==QEvent::MouseButtonDblClick){
+        if(static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton){toggleMaximized();return true;}
+    }
+    if(watched==titleBar_&&event->type()==QEvent::MouseButtonPress&&QGuiApplication::platformName()!="windows"){
+        if(static_cast<QMouseEvent*>(event)->button()==Qt::LeftButton&&windowHandle()&&windowHandle()->startSystemMove())return true;
+    }
+    return QMainWindow::eventFilter(watched,event);
+}
+void MainWindow::setMaximizeHover(bool hovered){
+    if(!maximizeBtn_||maximizeBtn_->property("nativeHover").toBool()==hovered)return;
+    maximizeBtn_->setProperty("nativeHover",hovered);maximizeBtn_->style()->unpolish(maximizeBtn_);maximizeBtn_->style()->polish(maximizeBtn_);maximizeBtn_->update();
+}
+void MainWindow::configureNativeFrame(){
+#ifdef Q_OS_WIN
+    if(QGuiApplication::platformName()!="windows")return;const auto id=quintptr(winId());if(nativeFrameId_==id)return;nativeFrameId_=id;
+    const auto hwnd=reinterpret_cast<HWND>(id);const auto style=GetWindowLongPtrW(hwnd,GWL_STYLE);
+    SetWindowLongPtrW(hwnd,GWL_STYLE,style|WS_CAPTION|WS_THICKFRAME|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX);
+    const BOOL dark=TRUE;DwmSetWindowAttribute(hwnd,20,&dark,sizeof(dark));const MARGINS shadow{1,1,1,1};DwmExtendFrameIntoClientArea(hwnd,&shadow);
+    SetWindowPos(hwnd,nullptr,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_FRAMECHANGED);
+#endif
+}
+bool MainWindow::nativeEvent(const QByteArray& eventType,void* message,qintptr* result){
+#ifdef Q_OS_WIN
+    const auto* msg=static_cast<MSG*>(message);const auto hwnd=msg->hwnd;
+    auto localPoint=[this,hwnd](LPARAM position,bool screen){POINT point{GET_X_LPARAM(position),GET_Y_LPARAM(position)};if(screen)ScreenToClient(hwnd,&point);return QPoint(qRound(point.x/devicePixelRatioF()),qRound(point.y/devicePixelRatioF()));};
+    if(msg->message==WM_NCCALCSIZE&&msg->wParam){
+        auto* params=reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
+        if(IsZoomed(hwnd)){MONITORINFO monitor{sizeof(MONITORINFO)};if(GetMonitorInfoW(MonitorFromRect(&params->rgrc[0],MONITOR_DEFAULTTONEAREST),&monitor))params->rgrc[0]=monitor.rcWork;}
+        *result=0;return true;
+    }
+    if(msg->message==WM_NCHITTEST&&titleBar_){
+        const auto point=localPoint(msg->lParam,true);RECT bounds{};GetWindowRect(hwnd,&bounds);const int x=GET_X_LPARAM(msg->lParam),y=GET_Y_LPARAM(msg->lParam);
+        if(!IsZoomed(hwnd)&&!isFullScreen()){
+            const int border=qMax(1,qRound(6*devicePixelRatioF()));const bool left=x<bounds.left+border,right=x>=bounds.right-border,top=y<bounds.top+border,bottom=y>=bounds.bottom-border;
+            if(top||bottom||left||right){*result=top?(left?HTTOPLEFT:right?HTTOPRIGHT:HTTOP):bottom?(left?HTBOTTOMLEFT:right?HTBOTTOMRIGHT:HTBOTTOM):left?HTLEFT:HTRIGHT;return true;}
+        }
+        if(maximizeBtn_&&maximizeBtn_->rect().contains(maximizeBtn_->mapFrom(this,point))){*result=HTMAXBUTTON;return true;}
+        if(titleBar_->rect().contains(titleBar_->mapFrom(this,point))){
+            for(auto* child=childAt(point);child&&child!=titleBar_;child=child->parentWidget())if(qobject_cast<QAbstractButton*>(child)){*result=HTCLIENT;return true;}
+            *result=HTCAPTION;return true;
+        }
+        *result=HTCLIENT;return true;
+    }
+    if(msg->message==WM_NCMOUSEMOVE){
+        setMaximizeHover(msg->wParam==HTMAXBUTTON);
+        if(msg->wParam==HTMAXBUTTON){TRACKMOUSEEVENT tracking{sizeof(TRACKMOUSEEVENT),TME_LEAVE|TME_NONCLIENT,hwnd,0};TrackMouseEvent(&tracking);LRESULT value=0;DwmDefWindowProc(hwnd,msg->message,msg->wParam,msg->lParam,&value);}
+    }
+    if(msg->message==WM_NCMOUSELEAVE)setMaximizeHover(false);
+    if((msg->message==WM_NCLBUTTONDOWN||msg->message==WM_NCLBUTTONDBLCLK)&&msg->wParam==HTMAXBUTTON){
+        maximizePressed_=true;maximizeBtn_->setDown(true);SetCapture(hwnd);*result=0;return true;
+    }
+    if(maximizePressed_&&msg->message==WM_MOUSEMOVE){maximizeBtn_->setDown(maximizeBtn_->rect().contains(maximizeBtn_->mapFrom(this,localPoint(msg->lParam,false))));*result=0;return true;}
+    if(maximizePressed_&&(msg->message==WM_LBUTTONUP||msg->message==WM_NCLBUTTONUP)){
+        const bool activate=maximizeBtn_->rect().contains(maximizeBtn_->mapFrom(this,localPoint(msg->lParam,msg->message==WM_NCLBUTTONUP)));
+        maximizePressed_=false;maximizeBtn_->setDown(false);ReleaseCapture();if(activate)maximizeBtn_->click();*result=0;return true;
+    }
+    if(msg->message==WM_CAPTURECHANGED){maximizePressed_=false;if(maximizeBtn_)maximizeBtn_->setDown(false);}
+#endif
+    return QMainWindow::nativeEvent(eventType,message,result);
 }
 
 void MainWindow::loadDemoData(bool withMessages, bool openBoard)

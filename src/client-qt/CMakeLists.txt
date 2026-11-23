@@ -154,6 +154,7 @@ add_executable(lanchat_qt WIN32
     src/ui/members_panel.cpp
     src/ui/main_window.cpp
     src/ui/board_connection_panel.cpp
+    src/ui/board_logs_panel.cpp
     resources/resources.qrc
     ${LANCHAT_WIN_RESOURCES}
 )
@@ -196,6 +197,16 @@ add_test(NAME board_display COMMAND lanchat_qt_test_board_display)
 set_tests_properties(board_display PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
 
+add_executable(lanchat_qt_test_board_logs tests/test_board_logs.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_board_logs PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_board_logs PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_board_logs PRIVATE crypt32)
+endif()
+add_test(NAME board_logs COMMAND lanchat_qt_test_board_logs)
+set_tests_properties(board_logs PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
+
 add_executable(lanchat_qt_test_message_echo tests/test_message_echo.cpp ${_client_sources})
 target_include_directories(lanchat_qt_test_message_echo PRIVATE src ${LANCHAT_PROTOCOL_DIR})
 target_link_libraries(lanchat_qt_test_message_echo PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
@@ -217,4 +228,21 @@ if(LANCHAT_TEST_SERVER)
     add_test(NAME lan_client COMMAND lanchat_qt_test_lan --server "${LANCHAT_TEST_SERVER}")
     set_tests_properties(lan_client PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}" TIMEOUT 90)
+endif()
+
+if(WIN32)
+    foreach(_window_target lanchat_qt lanchat_qt_test_board_alerts lanchat_qt_test_board_display lanchat_qt_test_board_logs lanchat_qt_test_message_echo lanchat_qt_test_lan)
+        target_link_libraries(${_window_target} PRIVATE user32 dwmapi)
+    endforeach()
+endif()
+
+add_executable(lanchat_qt_test_window_controls tests/test_window_controls.cpp ${_client_sources})
+target_include_directories(lanchat_qt_test_window_controls PRIVATE src ${LANCHAT_PROTOCOL_DIR})
+target_link_libraries(lanchat_qt_test_window_controls PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+add_test(NAME window_controls COMMAND lanchat_qt_test_window_controls)
+set_tests_properties(window_controls PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}")
+if(WIN32)
+    target_link_libraries(lanchat_qt_test_window_controls PRIVATE crypt32 user32 dwmapi)
+    add_test(NAME window_controls_native COMMAND lanchat_qt_test_window_controls)
+    set_tests_properties(window_controls_native PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=windows" ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir}" RUN_SERIAL TRUE)
 endif()

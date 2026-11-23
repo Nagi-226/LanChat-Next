@@ -3,6 +3,10 @@
     [Parameter(Mandatory=$true)][string]$ManifestPath,
     [Parameter(Mandatory=$true)][string]$TestClientPath,
     [Parameter(Mandatory=$true)][string]$QtTestDllPath,
+    [string]$BoardLogProbePath='',
+    [string]$BoardLogToolPath='',
+    [string]$PythonPath='',
+    [string]$BoardLogPort='',
     [string]$TestRoot=''
 )
 $ErrorActionPreference='Stop'
@@ -61,6 +65,13 @@ try {
         $env:QT_QPA_PLATFORM='offscreen'
         & $probe --server (Join-Path $destination 'lanchat_server_next.exe') 2>&1 | Out-File -LiteralPath (Join-Path $run 'runtime.log') -Encoding utf8
         if($LASTEXITCODE -ne 0){throw "Installed Qt/server LAN test failed: $LASTEXITCODE"}
+        if($BoardLogPort){
+            if(-not $BoardLogProbePath -or -not $BoardLogToolPath -or -not $PythonPath){throw 'Supply the board log probe, tool and Python paths for USB installer validation.'}
+            $logProbe=Join-Path $destination 'installer-log-probe.exe'
+            Copy-Item -LiteralPath $BoardLogProbePath -Destination $logProbe
+            & $PythonPath $BoardLogToolPath --server (Join-Path $destination 'lanchat_server_next.exe') --console (Join-Path $destination 'robomind-console\RoboMindConsole.exe') --port $BoardLogPort --qt-probe $logProbe --capture (Join-Path $run 'board-logs-panel.png') --result (Join-Path $run 'board-logs-result.json') 2>&1 | Out-File -LiteralPath (Join-Path $run 'board-logs-runtime.log') -Encoding utf8
+            if($LASTEXITCODE -ne 0){throw "Installed USB log/Qt query test failed: $LASTEXITCODE"}
+        }
     } finally {
         $env:PATH=$savedPath
         $env:QT_PLUGIN_PATH=$savedPlugin

@@ -21,6 +21,8 @@ public:
         int accountId = 0;
         QString password;
         QString consolePath;
+        bool logEnabled = false;
+        QString logPort = "COM3";
     };
     explicit BoardConnection(QObject* parent = nullptr, const QString& profileDir = {});
     ~BoardConnection() override;
@@ -34,24 +36,32 @@ public:
     QJsonObject snapshot() const;
     QString profileDirectory() const { return profileDir_; }
     bool navigate(const QString& action,QString* requestId=nullptr);
+    bool setLogCapture(bool enabled,const QString& port);
+    QJsonObject logSnapshot() const { return logSnapshot_; }
 signals:
     void changed();
     void accountChanged(int uid);
+    void logsChanged();
 private:
     void saveConfig();
     void launchConsole();
     void readRegistration();
     void pollStatus();
+    void pollLogs();
     void setState(const QString& state);
     Config cfg_;
     QString profileDir_;
     QString state_ = "未启动";
     QJsonObject status_;
+    QJsonObject logSnapshot_;
+    qint64 logUpdated_ = 0;
+    qint64 logFileModified_ = 0;
     QProcess proc_;
     QTcpSocket registration_;
     FrameBuffer registrationFrames_;
     QTimer registrationTimeout_;
     QTimer poll_;
+    QTimer logPoll_;
     bool registering_ = false;
     bool stopping_ = false;
 };

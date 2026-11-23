@@ -5,7 +5,7 @@
   #error OutputDirectory is required
 #endif
 #ifndef ReleaseVersion
-  #define ReleaseVersion "2026.11.22"
+  #define ReleaseVersion "2026.11.23"
 #endif
 
 [Setup]

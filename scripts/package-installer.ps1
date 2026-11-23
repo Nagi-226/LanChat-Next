@@ -1,12 +1,12 @@
 ﻿param(
     [Parameter(Mandatory=$true)][string]$BundleDirectory,
     [string]$OutputDirectory='',
-    [ValidatePattern('^\d{1,4}\.\d{1,2}\.\d{1,2}$')][string]$ReleaseVersion='2026.11.22',
+    [ValidatePattern('^\d{1,4}\.\d{1,2}\.\d{1,2}$')][string]$ReleaseVersion='2026.11.23',
     [string]$IsccPath=''
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-if(-not $OutputDirectory){$OutputDirectory=Join-Path $root 'build\windows-installer-20261122'}
+if(-not $OutputDirectory){$OutputDirectory=Join-Path $root 'build\windows-installer-20261123'}
 $bundle=(Resolve-Path -LiteralPath $BundleDirectory).Path
 if(-not $IsccPath){
     $candidates=@(
@@ -40,7 +40,7 @@ foreach($file in $files){
     }
     if(-not $allowed){throw "Unexpected bundle file: $relative"}
 }
-foreach($required in @('lanchat_qt.exe','lanchat_server_next.exe','lanchat-rounded-v2.ico','platforms\qwindows.dll')+$helpers){
+foreach($required in @('lanchat_qt.exe','lanchat_server_next.exe','lanchat-rounded-v2.ico','platforms\qwindows.dll','robomind-console\RoboMindConsole.exe','robomind-console\Qt6SerialPort.dll')+$helpers){
     if(-not (Test-Path -LiteralPath (Join-Path $bundle $required))){throw "Missing bundle file: $required"}
 }
 New-Item -ItemType Directory -Force -Path $payload | Out-Null
@@ -59,6 +59,7 @@ if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $setup)){throw 'Inno Set
 $manifest=[ordered]@{
     version=$ReleaseVersion
     source_commit=(& git -C $root rev-parse HEAD)
+    source_worktree_dirty=([bool](& git -C $root status --porcelain -- src/client-qt scripts docs README.md))
     setup=(Split-Path -Leaf $setup)
     setup_sha256=(Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
     files=@(Get-ChildItem -LiteralPath $payload -Recurse -File | ForEach-Object {

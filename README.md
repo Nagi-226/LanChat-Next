@@ -2,7 +2,7 @@
 
 面向可信公司局域网的桌面聊天应用，采用 **C++17 / Asio 服务端 + Qt6 Widgets 原生客户端**。在 RoboMind 系列中，同时提供告警送达和板端消息显示入口。
 
-> 当前状态：2026-11-22。Qt 原生客户端已取代 Tauri；共享主机、群管理、历史同步、PC 附件与四项设备查询已落地；普通 Unicode 表情作为文字发送。下表按当前 Qt 实现记录，旧客户端的功能不自动视为已经迁移。
+> 当前状态：2026-11-23。Qt 原生客户端已取代 Tauri；共享主机、群管理、历史同步、PC 附件、四项设备查询与 USB 板端日志初版已落地；普通 Unicode 表情作为文字发送。下表按当前 Qt 实现记录，旧客户端的功能不自动视为已经迁移。
 
 ## 当前能力
 
@@ -14,10 +14,12 @@
 | 群管理 | 按群 ID 自由加入，立即刷新列表；按当前群展示成员，退出后撤销历史/附件访问 |
 | 板端告警 | 专用桥账号、左栏告警分节和告警卡片；Console 支持群 / 私聊双发 |
 | 板端连接面板 | 同一个主窗口展示状态、发送文字、查看显示回执、切换 S3 页面 |
+| 板端运行日志 | USB ESP_LOG / printf 实时查看、筛选、暂停、脱敏导出；`/日志` 在原会话回复最近片段 |
 | 设备只读查询 | 私聊感知 / 链路 / 设备 / 帮助；配置群用 /命令，Console 取得实板快照并回复原会话 |
 | Unicode 文字表情 | 可以作为 UTF-8 文本输入 / 发送；Qt 尚无专用表情选择面板，显示效果取决于系统字体 |
 | 图片、静态 / 动态表情包、普通文件 | 实际分块上传/下载、SHA-256 校验、图片/GIF 预览、进度/暂停/取消、缓存及断点恢复；默认 100 MB |
 | 多台 PC 共用服务器 | 服务器设置支持本机托管和 LAN 主机地址/端口；远程模式不启动本机服务端 |
+| Windows 窗口操作 | 同尺寸矢量控制图标、最大化 / 还原状态切换；原生标题栏拖动、吸附和边缘缩放 |
 
 **部署边界**：当前服务端必要修复与本轮功能一起收口，包括用户名登录、bcrypt v2 密码存储、admin 初始化和 MinGW 链接。聊天 TCP 尚无 TLS / 端到端加密，适用于可信 LAN 或加密组网；公司生产压力和两台物理 PC 的网络验收仍需进行。
 
@@ -50,9 +52,15 @@ flowchart LR
 
 附件支持按钮选择、拖拽、剪贴板图片；接收后可预览图片/GIF、另存文件。默认单文件 100 MiB，服务器配额 5 GiB，客户端完整附件缓存约 512 MiB。暂停或断线后点击 **继续**，重启后未完成任务仍保留。
 
-Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.22-x64.exe`** 双击安装，随包带齐运行库，创建桌面 / 开始菜单入口并支持卸载。测试者安装后在 **服务器 → 连接公司局域网主机** 填同一主机地址和端口 `12346`，再注册、登录并凭群 ID 加入。跨网络测试先取得 Tailscale 组网访问权限。
+Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.23-x64.exe`** 双击安装，随包带齐运行库，创建桌面 / 开始菜单入口并支持卸载。测试者安装后在 **服务器 → 连接公司局域网主机** 填同一主机地址和端口 `12346`，再注册、登录并凭群 ID 加入。跨网络测试先取得 Tailscale 组网访问权限。
 
 公司常开主机、Windows 防火墙、安装包 / ZIP、备份和限额：[局域网部署说明](docs/lan-deployment.md)。公司主机可独立后台运行，关闭聊天窗口后继续服务其他用户。
+
+### 窗口操作
+
+右上角三个窗口按钮使用相同大小的点击区域和矢量图标。最大化后，中间按钮显示 **还原** 图标；关闭按钮悬停时显示红色背景。
+
+拖动顶部标题或空白区域可移动窗口，拖到屏幕顶部松开可按 Windows 的窗口吸附设置最大化；双击标题栏可切换最大化 / 还原，最大化后可从标题栏拖回普通窗口。普通窗口的边缘与四角支持缩放，最大化内容避让任务栏。操作及验证范围见 [Windows 窗口说明](docs/window-behavior.md)。
 
 ### 板端连接
 
@@ -61,6 +69,7 @@ Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.22-x64.exe`** 双击�
 - 查看桥进程、板端连接和消息投递状态。
 - 发送到板端需要先登录 LanChat。
 - 控制板端 **总览 / 收件箱 / PPM / VVOS 链路 / 设备** 五页，以及详情、正文滚动、本地已读和中英文偏好。
+- **运行日志** 页选择 USB 串口并启用采集。右侧查询或原聊天框支持 `/日志`、`/日志 错误`、`/日志 链路`、`/日志 帮助`；其他 PC 可查询片段。实时面板当前使用主机 USB，纯 Wi-Fi 日志与远程连续订阅留后续。
 - 面板内容居中，最大 960 逻辑像素；再次打开保留草稿、滚动和回执。
 
 板端正文最多 **384 字节 UTF-8**、收件箱最多 **8 条**。`accepted` 表示进入队列；`rendered` 表示可见预览或详情完成 LVGL / LCD DMA 刷新，不代表人已阅读。PC 附件通过认证分块协议传输；Console 在两层入口过滤非文字和附件引用，不使用这组板端容量限制。
@@ -72,7 +81,7 @@ Windows 10/11 x64 可使用 **`LanChat-Next-Setup-2026.11.22-x64.exe`** 双击�
 ### 环境
 
 - Windows，CMake 3.28+、Ninja。
-- Qt 6.10.3 `mingw_64`，对应 MinGW 工具链。
+- Qt 6.10.3 `mingw_64`，对应 MinGW 工具链；Console 需要 Qt SerialPort 模块，分发含 `robomind-console/Qt6SerialPort.dll`。
 - 部署板端桥时，旁边需要 RoboMind-Console 和 Virtual-Vehicle-OS 仓库；Console 使用 `VVOS_ROOT` 路径依赖。
 - 当前原生客户端不依赖 Node、Rust 或 WebView。Qt DLL / plugins 和服务端 sidecar 仍需要随部署目录分发。
 
@@ -101,11 +110,11 @@ ctest --test-dir build-qt --output-on-failure
 
 ```powershell
 winget install --id JRSoftware.InnoSetup --exact --source winget
-.\scripts\package-lan.ps1 -OutputDirectory build/lan-distribution-20261122
-.\scripts\package-installer.ps1 -BundleDirectory build/lan-distribution-20261122/LanChat-Next
+.\scripts\package-lan.ps1 -OutputDirectory build/lan-distribution-20261123
+.\scripts\package-installer.ps1 -BundleDirectory build/lan-distribution-20261123/LanChat-Next
 ```
 
-输出在 `build/windows-installer-20261122/`。接收者只需运行安装 `.exe`，无需 Qt、Python、Node 或 PowerShell 安装脚本；Tailscale 按联网方式单独安装。安装器按当前用户安装，保留升级 / 卸载后的个人设置和数据；附中文联机说明与第三方运行库许可文本。
+输出在 `build/windows-installer-20261123/`。接收者只需运行安装 `.exe`，无需 Qt、Python、Node 或 PowerShell 安装脚本；Tailscale 按联网方式单独安装。安装器按当前用户安装，保留升级 / 卸载后的个人设置和数据；附中文联机说明与第三方运行库许可文本。
 
 2026-11-22 安装验收通过：`scripts/test-windows-installer.ps1` 使用实际安装器和独立目录，核对 59 个文件、快捷方式、安装目录中的 Qt / 服务端双客户端 LAN 测试、重复安装、卸载及个人文件保留。测试探针另需 `-TestClientPath` 与 `-QtTestDllPath`，QtTest 不随正式安装器分发；已注册该安装器或已有开始菜单组的用户需要换一个干净 Windows 用户运行验收脚本。两个物理 PC 的联机验收仍待测试者配合。
 
@@ -138,6 +147,14 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 - 组织权限/入群审批、TLS、审计/附件留存管理、公司规模压力测试、移动客户端。
 
 2026-11-22 更新：Qt 11/11 通过，查询与板端桥已部署；S3 固件新增查询并实板验证。当前进度与后续验收：[实施清单](docs/next-steps-20261122.md)。[异地连接调查](docs/cross-network-options.md)保留 ZeroTier / SimpleX / Jami 的比较资料。
+
+2026-11-23：Qt **12/12**（含日志页长行换行、筛选、暂停和清空缓存语义），Console 日志缓存与查询检查通过。实际安装器 **60 个文件**逐项哈希、升级 / 卸载 / 个人文件保留通过；安装目录运行库完成真实 COM3 → Console → 日志页 → 原聊天回复，以及串口占用恢复和历史轮换验收。未重新烧录 S3，异地两台物理 PC 仍待验。
+
+同日界面更新：运行日志页对齐深色圆角卡片风格，采用分层工具栏、等宽时间 / 级别、蓝灰模块名及黄 / 红告警色带。本机部署与安装包同步更新，Qt **12/12** 通过；此样式包未重复执行前述完整安装生命周期与实板验收。
+
+日志标题栏的 **跟随最新** 默认开启，自动显示新输出并让末行在页面中可见；向上查看历史暂停跟随，滚回底部、重新勾选或恢复显示后继续跟随。自动滚动、历史位置保留、暂停恢复与切回日志页的回归，以及板端界面 / 告警检查 **3/3** 通过。
+
+同日窗口修复：统一控制图标、最大化 / 还原图标同步及 Windows 原生窗口操作已部署，Qt **14/14**（含真实 Windows 工作区 / 命中 / 窗口命令检查）通过。实际拖拽吸附、Snap 悬停面板和多屏手势仍待实机确认，见 [验证范围](docs/window-behavior.md)。
 
 协议与实现说明：[附件协议](docs/attachment-protocol.md)、[局域网部署](docs/lan-deployment.md)、[板端面板](docs/board-panel.md)。
 

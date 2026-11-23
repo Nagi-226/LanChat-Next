@@ -19,6 +19,8 @@
 #include <QScrollArea>
 #include <QComboBox>
 #include <QGridLayout>
+#include <QTabWidget>
+#include "ui/board_logs_panel.h"
 
 BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* parent, Session* session)
     : QWidget(parent), bridge_(bridge), session_(session)
@@ -50,6 +52,11 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     description->setWordWrap(true);
     description->setStyleSheet("color:#8A94A4;background:transparent;");
     layout->addWidget(description);
+    auto* tabs=new QTabWidget(content);tabs->setObjectName("boardConnectionTabs");
+    auto* connectionPage=new QWidget(tabs);tabs->addTab(connectionPage,"连接与屏幕");
+    tabs->addTab(new BoardLogsPanel(bridge_,session_,tabs),"运行日志");layout->addWidget(tabs);
+    auto* connectionLayout=new QVBoxLayout(connectionPage);connectionLayout->setContentsMargins(0,12,0,0);
+    layout=connectionLayout;
     status_ = new QLabel(this);
     status_->setObjectName("boardConnectionStatus");
     status_->setStyleSheet("background:#1D212A;padding:14px;border-radius:8px;font-weight:600;");
