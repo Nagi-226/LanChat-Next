@@ -48,14 +48,15 @@ flowchart LR
 | Codec | ES8388，复用 legacy I2C0，SDA41 / SCL42，地址 0x10 |
 | I2S | MCLK3、BCLK46、WS9、DOUT10，16kHz |
 | 格式 / 缓存 | PCM16 单声道复制左右输出；64 KiB PSRAM 环形缓存 |
+| 预缓冲 / DMA | 初次及欠载后 24 KiB（768ms），短段接收完整即播放；I2S 8×256 帧（128ms） |
 | 播放任务 | 6,144 字节栈；LVGL 仍由原 UI 任务执行 |
 | 单帧 | VVOS 11 字段 + 4 字节长度头，最大 2,048 字节 |
 | 单块 / 单段 | 768 PCM 字节；单段最多 1,280,000 字节，必须为偶数 |
 | 字幕 / 段数 | 384 UTF-8 字节 / 段；回答最多 256 段 |
 
-话题：`ui/assistant_state`（id / state / text），`ui/audio_start`（id / 段序号 / 总字节数 / 字幕），`ui/audio_chunk`（id / 段序号 / 块序号 / base64），`ui/audio_cancel`（id），上行 `ui/audio_status`（id / segment / received / played / free / done / error / peak / rendered / cancelled）。
+话题：`ui/assistant_state`（id / state / text），`ui/audio_start`（id / 段序号 / 总字节数 / 字幕），`ui/audio_chunk`（id / 段序号 / 块序号 / base64），`ui/audio_cancel`（id），上行 `ui/audio_status`（id / segment / received / played / free / done / error / peak / rendered / cancelled / underruns / dma_gaps / crc32）。
 
-`received` 是已接受 PCM；`played` 是成功提交给 I2S 的单声道字节数，不等于人耳听到或精确 DMA 播放时间。首段等待字幕刷新和预缓冲；下一段等待上一段字节完成。按剩余缓存及确认字节数流控，处理错序、重复、旧段、非法数据、超时、取消和断线；重连不重播旧回答。
+`received` 是已接受 PCM；`played` 是成功提交给 I2S 的单声道字节数，不等于人耳听到或精确 DMA 播放时间。首段等待字幕刷新和预缓冲；段尾补齐 DMA 帧并等待排空后报告 `done`，下一段等待此确认。两端启用 TCP_NODELAY，按剩余缓存及确认字节数流控，处理错序、重复、旧段、非法数据、超时、取消和断线；重连不重播旧回答。`underruns` / `dma_gaps` / `crc32` 按段重置，队列事件是调度线索，实际声音仍需试听。
 
 沉浸层覆盖普通终端时，隐藏收件箱消息不记为 `rendered`；媒体字幕使用独立刷新回执。PC 图片 / GIF / 文件继续使用原 PC 附件通道。
 
