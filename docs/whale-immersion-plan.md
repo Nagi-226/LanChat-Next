@@ -2,6 +2,8 @@
 
 2026-11-24（Asia/Shanghai）。初版已接入 LanChat、Console 和 COM3 的 RoboMind-S3。源码与本机版本为 **2026.11.24.2**，鲸鱼娘初版随本轮主分支更新，现有完整安装包仍为 2026.11.23.2。
 
+音质优化已通过固定音源 / 网络停顿和实板回归，用户已确认“音效合格”，本轮合入三仓主分支。详细参数与听音验收见 [S3 音质记录](https://github.com/Nagi-226/RoboMind-S3/blob/master/docs/audio-quality-20261124.md)。
+
 ## 使用方式
 
 1. 登录 LanChat，打开 **左下角齿轮 → 设置 → 板端连接 → 连接与屏幕**。
@@ -56,7 +58,7 @@ flowchart LR
 
 话题：`ui/assistant_state`（id / state / text），`ui/audio_start`（id / 段序号 / 总字节数 / 字幕），`ui/audio_chunk`（id / 段序号 / 块序号 / base64），`ui/audio_cancel`（id），上行 `ui/audio_status`（id / segment / received / played / free / done / error / peak / rendered / cancelled / underruns / dma_gaps / crc32）。
 
-`received` 是已接受 PCM；`played` 是成功提交给 I2S 的单声道字节数，不等于人耳听到或精确 DMA 播放时间。首段等待字幕刷新和预缓冲；段尾补齐 DMA 帧并等待排空后报告 `done`，下一段等待此确认。两端启用 TCP_NODELAY，按剩余缓存及确认字节数流控，处理错序、重复、旧段、非法数据、超时、取消和断线；重连不重播旧回答。`underruns` / `dma_gaps` / `crc32` 按段重置，队列事件是调度线索，实际声音仍需试听。
+`received` 是已接受 PCM；`played` 是成功提交给 I2S 的单声道字节数，不等于人耳听到或精确 DMA 播放时间。首段等待字幕刷新和预缓冲；段尾补齐 DMA 帧并等待排空后报告 `done`，下一段等待此确认。两端启用 TCP_NODELAY，按剩余缓存及确认字节数流控，处理错序、重复、旧段、非法数据、超时、取消和断线；重连不重播旧回答。`underruns` / `dma_gaps` / `crc32` 按段重置，队列事件是调度线索；本机音质已获用户听音验收。
 
 沉浸层覆盖普通终端时，隐藏收件箱消息不记为 `rendered`；媒体字幕使用独立刷新回执。PC 图片 / GIF / 文件继续使用原 PC 附件通道。
 

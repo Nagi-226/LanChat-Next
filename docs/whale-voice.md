@@ -57,6 +57,6 @@ Console 用独立子进程的 UTF-8 JSON 管道传入当前句子，不开启额
 
 ## 本轮验证
 
-本机试听和数字 / 英文缩写、空文本、384 字节上限及失败后恢复已验证。真实 LanChat 服务端 → Console → COM3 实板完成三段语音，共 **425,764 PCM 字节**；停止、新问题打断、返回五页与 **5 条 PC 回复单次持久化**通过，解码失败为 0。内容使用本机模拟模型，没有新增官方 API 费用。用户已确认声线变换。针对说话中的爆音 / 断续，后续优化分支在两端启用 TCP_NODELAY，S3 增加预缓冲 / DMA 并平滑段首尾；固定 221,054 字节音源与中途 300ms 停顿实测完整、CRC 一致、欠载 / DMA 队列断档计数为 0。3 秒停顿触发一次重新缓冲并完整恢复。音质仍待用户听音验收，源码与测试见 `RoboMind-S3/docs/audio-quality-20261124.md`。
+本机试听和数字 / 英文缩写、空文本、384 字节上限及失败后恢复已验证。真实 LanChat 服务端 → Console → COM3 实板完成三段语音，共 **425,764 PCM 字节**；停止、新问题打断、返回五页与 **5 条 PC 回复单次持久化**通过，解码失败为 0。内容使用本机模拟模型，没有新增官方 API 费用。用户已确认声线变换。针对说话中的爆音 / 断续，两端启用 TCP_NODELAY，S3 增加预缓冲 / DMA 并平滑段首尾；固定 221,054 字节音源与中途 300ms 停顿实测完整、CRC 一致、欠载 / DMA 队列断档计数为 0。3 秒停顿触发一次重新缓冲并完整恢复。用户于 2026-11-24 明确确认“音效合格”，批准本轮合入主分支；源码与测试见 [S3 音质记录](https://github.com/Nagi-226/RoboMind-S3/blob/master/docs/audio-quality-20261124.md)。
 
 本机证据：`RoboMind-Console/build/ai-validation/whale-chat-local-vits.json`、`D:\AI\RoboMind-Voice/preview-result.json`、`D:\AI\RoboMind-Voice/worker-validation.json`。鲸鱼娘初版源码随本轮主分支更新，完整安装包仍为 2026.11.23.2。
