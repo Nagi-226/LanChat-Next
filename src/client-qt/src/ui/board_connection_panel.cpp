@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 #include <QScrollArea>
 #include <QComboBox>
+#include <QStandardItemModel>
 #include <QGridLayout>
 #include <QTabWidget>
 #include "ui/board_logs_panel.h"
@@ -181,6 +182,31 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
         delivery_->setText("正在提交到 LanChat…"); send_->setEnabled(false);
     });
     connect(message_, &QPlainTextEdit::textChanged, this, &BoardConnectionPanel::refresh);
+    auto* whaleTitle=new QLabel("鲸鱼娘沉浸模式",this);
+    whaleTitle->setStyleSheet("font-size:16px;font-weight:600;color:#E7EDF7;background:transparent;");layout->addWidget(whaleTitle);
+    auto* whaleHint=new QLabel("启动时短暂展示角色；沉浸模式下，LanChat 文字回答会同步到板端字幕与扬声器。\n语音由桥接 PC 合成，可选择本机少女声线或 Windows 中文语音，可停止或用新问题打断。",this);whaleHint->setWordWrap(true);layout->addWidget(whaleHint);
+    auto* voice=new QComboBox(this);voice->setObjectName("boardWhaleVoice");voice->addItem("自动选择（优先本机少女声线）","auto");voice->addItem("Windows 中文语音","windows");voice->addItem("派蒙风格少女（本地 VITS）","local_vits");
+    voice->setCurrentIndex(qMax(0,voice->findData(bridge_->config().voiceProvider)));layout->addWidget(voice);
+    voice->setToolTip("切换声线会重新连接板端桥并停止当前语音。少女模型单独安装在桥接 PC；未安装时自动使用 Windows 语音。");
+    const auto updateVoice=[this,voice]{if(auto* model=qobject_cast<QStandardItemModel*>(voice->model()))model->item(2)->setEnabled(bridge_->localVoiceAvailable());};
+    connect(bridge_,&BoardConnection::changed,voice,updateVoice);updateVoice();
+    connect(voice,QOverload<int>::of(&QComboBox::activated),this,[this,voice]{if(!bridge_->setVoiceProvider(voice->currentData().toString()))voice->setCurrentIndex(qMax(0,voice->findData(bridge_->config().voiceProvider)));});
+    auto* whaleButtons=new QGridLayout;
+    int whaleIndex=0;
+    for(const auto& item:QList<QPair<QString,QString>>{{"进入沉浸模式","immersion"},{"返回五页终端","terminal"},{"扬声器短音测试","audio_test"},{"停止说话","stop_speech"}}){
+        auto* button=new QPushButton(item.first,this);button->setObjectName("boardWhale_"+item.second);whaleButtons->addWidget(button,whaleIndex/2,whaleIndex%2);++whaleIndex;
+        connect(button,&QPushButton::clicked,this,[this,action=item.second]{if(!bridge_->navigate(action))stats_->setText("板端未就绪或不支持沉浸模式，请检查连接和固件。");});
+        const auto enableWhale=[this,button,action=item.second]{const auto d=bridge_->snapshot().value("display").toObject();button->setEnabled(d.value("terminal_ready").toBool()&&d.value("immersion_supported").toBool()&&(action!="audio_test"||d.value("pcm_supported").toBool()));};
+        connect(bridge_,&BoardConnection::changed,button,enableWhale);enableWhale();
+    }
+    layout->addLayout(whaleButtons);
+    auto* volume=new QComboBox(this);volume->setObjectName("boardWhaleVolume");for(int value:{10,20,30,40,50})volume->addItem(QString("音量 %1%").arg(value),value);volume->setCurrentIndex(1);layout->addWidget(volume);
+    connect(volume,QOverload<int>::of(&QComboBox::activated),this,[this,volume]{bridge_->navigate("volume_"+volume->currentData().toString());});
+    const auto updateVolume=[this,volume]{const auto d=bridge_->snapshot().value("display").toObject();volume->setEnabled(d.value("terminal_ready").toBool()&&d.value("pcm_supported").toBool());const auto index=volume->findData(d.value("view").toObject().value("volume").toInt(20));if(index>=0)volume->setCurrentIndex(index);};
+    connect(bridge_,&BoardConnection::changed,volume,updateVolume);updateVolume();
+    auto* speechStatus=new QLabel(this);speechStatus->setObjectName("boardWhaleSpeechStatus");speechStatus->setWordWrap(true);layout->addWidget(speechStatus);
+    const auto updateSpeech=[this,speechStatus]{const auto s=bridge_->snapshot().value("speech").toObject();const auto view=bridge_->snapshot().value("display").toObject().value("view").toObject();speechStatus->setText(QString("板端界面：%1 · 语音状态：%2 · 已完成 %3 段\n声线：%4\n%5").arg(view.value("immersion").toBool()?"鲸鱼娘":"五页终端",s.value("stage").toString("未连接")).arg(s.value("completed_segments").toInt()).arg(s.value("voice").toString("待连接")).arg(s.value("last_error").toString()));};
+    connect(bridge_,&BoardConnection::changed,speechStatus,updateSpeech);updateSpeech();
     if (session_) connect(session_, &Session::messageReceived, this, [this](const QJsonObject& message) {
         if (pendingText_.isEmpty() || message.value("fromId").toInt() != session_->selfId()
             || message.value("toId").toInt() != bridge_->config().accountId || message.value("msg").toString() != pendingText_) return;

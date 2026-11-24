@@ -21,6 +21,7 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
         : profileDir;
     QSettings s;
     cfg_.autoStart = s.value("board_bridge/auto_start", false).toBool();
+    cfg_.voiceProvider=s.value("board_bridge/voice_provider","auto").toString();
     cfg_.logEnabled = s.value("board_bridge/log_enabled",false).toBool();
     cfg_.logPort = s.value("board_bridge/log_port","COM3").toString();
     cfg_.aiEnabled = s.value("board_ai/enabled",false).toBool();
@@ -109,6 +110,7 @@ void BoardConnection::saveConfig()
     s.setValue("board_bridge/account_id", cfg_.accountId);
     s.setValue("board_bridge/secret", credentials::encryptSecret(cfg_.password));
     s.setValue("board_bridge/console_path", cfg_.consolePath);
+    s.setValue("board_bridge/voice_provider",cfg_.voiceProvider);
     if (cfg_.accountId > 0) s.setValue("board_account_id", cfg_.accountId);
     s.sync();
 }
@@ -176,6 +178,7 @@ void BoardConnection::launchConsole()
         if (ini.status() != QSettings::NoError) { setState("无法写入板端桥配置"); return; }
     }
     auto env = QProcessEnvironment::systemEnvironment();
+    env.insert("ROBOMIND_TTS_PROVIDER",cfg_.voiceProvider);
     env.insert("ROBOMIND_LANCHAT_USER_ID", QString::number(cfg_.accountId));
     env.insert("ROBOMIND_LANCHAT_PASSWORD", cfg_.password);
     env.insert("ROBOMIND_AI_ENABLED",cfg_.aiEnabled?"1":"0");
@@ -219,6 +222,18 @@ void BoardConnection::stop()
 }
 
 void BoardConnection::applyPreferences(){defaultPageApplied_=false;pollStatus();}
+bool BoardConnection::localVoiceAvailable()const{
+    QFile file(QFileInfo(cfg_.consolePath).absolutePath()+"/voice-backend.json");
+    if(!file.open(QIODevice::ReadOnly)||file.size()>16384)return false;
+    const auto data=QJsonDocument::fromJson(file.readAll()).object();
+    for(const QString key:{"python","worker","runtime"}){const auto path=data.value(key).toString();if(!QFileInfo(path).isAbsolute()||!QFile::exists(path))return false;}
+    return QFile::exists(data.value("runtime").toString()+"/voice.json");
+}
+bool BoardConnection::setVoiceProvider(const QString& provider){
+    if(!QStringList{"auto","windows","local_vits"}.contains(provider)||(provider=="local_vits"&&!localVoiceAvailable()))return false;
+    if(provider==cfg_.voiceProvider)return true;
+    const bool restart=running();auto config=cfg_;config.voiceProvider=provider;configure(config);if(restart)start();return true;
+}
 
 void BoardConnection::setDefaultRecipient(int uid)
 {
@@ -279,7 +294,7 @@ void BoardConnection::pollLogs(){
 bool BoardConnection::navigate(const QString& action,QString* requestId)
 {
     const auto display=snapshot().value("display").toObject();
-    const QStringList allowed={"home","inbox","ppm","link","device","detail","next","previous","read","scroll_down","scroll_up","lang_zh","lang_en"};
+    const QStringList allowed={"home","inbox","ppm","link","device","detail","next","previous","read","scroll_down","scroll_up","lang_zh","lang_en","immersion","terminal","audio_test","stop_speech","volume_10","volume_20","volume_30","volume_40","volume_50"};
     if(!display.value("terminal_ready").toBool()||!display.value("navigation").toBool()||!allowed.contains(action)||QFile::exists(profileDir_+"/navigation.request"))return false;
     QSaveFile file(profileDir_+"/navigation.request");
     if(!file.open(QIODevice::WriteOnly))return false;

@@ -11,6 +11,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
+#include <QComboBox>
+#include <QStandardItemModel>
 #include <QFontDatabase>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -62,7 +64,7 @@ int main(int argc,char** argv)
             QJsonObject display{{"terminal_ready",true},{"navigation",true},{"view",QJsonObject{{"page",0},{"language","zh"}}}};
             QFile state(QFileInfo(status).absolutePath()+"/fake-display.json");
             if(state.open(QIODevice::ReadOnly))display=QJsonDocument::fromJson(state.readAll()).object();
-            save(status,{{"updated_ms",QDateTime::currentMSecsSinceEpoch()},{"listening",true},{"board_connected",true},{"display",display}});
+            save(status,{{"updated_ms",QDateTime::currentMSecsSinceEpoch()},{"listening",true},{"board_connected",true},{"display",display},{"speech",QJsonObject{{"provider",qEnvironmentVariable("ROBOMIND_TTS_PROVIDER")}}}});
         });timer.start(100);return app.exec();
     }
     const bool live=args.contains("--live");
@@ -140,6 +142,21 @@ int main(int argc,char** argv)
         assert(bridge.navigate("device"));QFile request(bridge.profileDirectory()+"/navigation.request");assert(request.open(QIODevice::ReadOnly));
         assert(QJsonDocument::fromJson(request.readAll()).object().value("action").toString()=="device");
         assert(!bridge.navigate("reboot"));
+        request.close();assert(request.remove());
+        auto* immersion=dialog.findChild<QPushButton*>("boardWhale_immersion");auto* volume=dialog.findChild<QComboBox*>("boardWhaleVolume");
+        assert(immersion&&volume&&!immersion->isEnabled());
+        save(bridge.profileDirectory()+"/fake-display.json",{{"terminal_ready",true},{"navigation",true},{"immersion_supported",true},{"pcm_supported",true},{"view",QJsonObject{{"page",0},{"immersion",true},{"volume",30}}}});
+        assert(waitFor([&]{return immersion->isEnabled()&&volume->currentData().toInt()==30;}));
+        QTest::mouseClick(immersion,Qt::LeftButton);assert(request.open(QIODevice::ReadOnly));
+        assert(QJsonDocument::fromJson(request.readAll()).object().value("action").toString()=="immersion");request.close();assert(request.remove());
+        save(bridge.profileDirectory()+"/fake-display.json",{{"terminal_ready",false},{"navigation",true},{"immersion_supported",true},{"pcm_supported",true}});
+        assert(waitFor([&]{return !immersion->isEnabled()&&!volume->isEnabled();}));
+        auto* voice=dialog.findChild<QComboBox*>("boardWhaleVoice");assert(voice&&voice->currentData().toString()=="auto");
+        assert(!bridge.localVoiceAvailable()&&!qobject_cast<QStandardItemModel*>(voice->model())->item(2)->isEnabled());
+        assert(!bridge.setVoiceProvider("local_vits")&&!bridge.setVoiceProvider("unknown"));
+        assert(bridge.setVoiceProvider("windows"));
+        assert(waitFor([&]{return bridge.snapshot().value("speech").toObject().value("provider").toString()=="windows";}));
+        BoardConnection reloaded(nullptr,temporary.path()+"/unused");assert(reloaded.config().voiceProvider=="windows");
         std::printf("PASS board display panel: UTF-8 bound, real Session send, server-ID mapping, accepted/rendered feedback, navigation request\n");
     }
     const int capture=args.indexOf("--capture");

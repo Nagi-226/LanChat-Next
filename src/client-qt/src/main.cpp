@@ -52,7 +52,7 @@ int main(int argc, char** argv)
     // 运行时窗口/任务栏图标。exe 的文件图标由 resources/app.rc 嵌进 PE 资源，
     // 两者是两处独立来源：改了图标要同时换 .ico（PE）与 .png（这份）。
     app.setWindowIcon(QIcon(":/icons/lanchat-256.png"));
-    app.setApplicationVersion("2026.11.23.2");preferences::applyDisplay();
+    app.setApplicationVersion("2026.11.24.2");preferences::applyDisplay();
 
     ServerProcess server;
     QSettings settings;

@@ -21,6 +21,7 @@ public:
         int accountId = 0;
         QString password;
         QString consolePath;
+        QString voiceProvider="auto";
         bool logEnabled = false;
         QString logPort = "COM3";
         bool aiEnabled = false;
@@ -42,6 +43,8 @@ public:
     bool navigate(const QString& action,QString* requestId=nullptr);
     bool setLogCapture(bool enabled,const QString& port);
     void applyPreferences();
+    bool setVoiceProvider(const QString& provider);
+    bool localVoiceAvailable() const;
     QJsonObject logSnapshot() const { return logSnapshot_; }
 signals:
     void changed();
