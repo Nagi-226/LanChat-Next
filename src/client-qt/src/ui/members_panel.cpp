@@ -56,7 +56,7 @@ void MembersPanel::setMembers(const QList<ContactItem>& items)
         auto* h = new QHBoxLayout(row);
         h->setContentsMargins(8, 6, 8, 6);
         h->setSpacing(8);
-        h->addWidget(new Avatar(it.name, 34, row));
+        h->addWidget(new Avatar(it.name, 34, row, it.avatarId));
         auto* nm = new QLabel(it.name, row);
         nm->setObjectName("contactName");
         h->addWidget(nm, 1);

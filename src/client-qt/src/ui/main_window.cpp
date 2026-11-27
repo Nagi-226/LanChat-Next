@@ -161,7 +161,7 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         for (const auto& u : users) {
             const auto uo = u.toObject();
             store_->upsertContact(uo.value("id").toInt(), uo.value("nickname").toString(),
-                                  uo.value("status").toString() == "ok");
+                                  uo.value("status").toString() == "ok",uo.value("headId").toInt());
         }
         groups_.clear();
         const auto groups = o.value("groups").toArray();
@@ -232,7 +232,7 @@ MainWindow::MainWindow(Session* s, Store* st, DevMode* dev, QWidget* parent)
         if(type==10||type==14){bool known=false;for(const auto& g:groups_)if(g.first==gid)known=true;
             if(gid>0&&!known)groups_.append({gid,o["name"].toString()});refreshGroups();openConversation(gid,true);}
         if(type==61||type==14){groupMembers_[gid].clear();for(auto v:o["users"].toArray()){auto u=v.toObject();int uid=u["id"].toInt();
-            groupMembers_[gid].append(uid);store_->upsertContact(uid,u["nickname"].toString(),u["status"].toString()=="ok");}refreshMembers();refreshContacts();}
+            groupMembers_[gid].append(uid);store_->upsertContact(uid,u["nickname"].toString(),u["status"].toString()=="ok",u["headId"].toInt());}refreshMembers();refreshContacts();}
         if(type==18||type==19){
             if(type==19 && o["id"].toInt()==selfId_){for(int i=groups_.size()-1;i>=0;--i)if(groups_[i].first==gid)groups_.removeAt(i);
                 groupMembers_.remove(gid);refreshGroups();if(currentIsGroup_&&currentPeer_==gid){currentPeer_=0;currentIsGroup_=false;chat_->clear();chat_->setPeerLabel("已退出群组");chat_->setGroup(false);refreshMembers();}}
@@ -370,6 +370,7 @@ void MainWindow::refreshContacts()
         ContactItem it;
         it.id = c.id;
         it.name = c.nickname;
+        it.avatarId = c.avatarId;
         it.online = c.online;
         it.unread = unread_.value(Store::directKey(c.id), 0);
         const auto conv = store_->conversation(Store::directKey(c.id));
@@ -439,6 +440,7 @@ void MainWindow::refreshMembers()
         ContactItem it;
         it.id = c.id;
         it.name = c.nickname;
+        it.avatarId = c.avatarId;
         it.online = c.online;
         items.append(it);
     }
@@ -593,7 +595,7 @@ void MainWindow::loadDemoData(bool withMessages, bool openBoard)
 }
 
 void MainWindow::renderMessage(const Message& m,bool grouped,int level) {
-    if(m.contentType=="text") chat_->appendMessage(m.fromId,senderName(m.fromId),m.text,m.ts,grouped,level);
+    if(m.contentType=="text") chat_->appendMessage(m.fromId,senderName(m.fromId),m.text,m.ts,grouped,level,store_->avatarId(m.fromId));
     else chat_->appendAttachment(m.fromId,senderName(m.fromId),m.attachment,m.ts,transfers_->cachedPath(m.attachment));
 }
 void MainWindow::renderConversation(){
@@ -696,7 +698,7 @@ void MainWindow::changeConnection(const QString& address,quint16 port,bool hoste
     auto bridgeConfig=bridge_->config();const bool wasRunning=bridge_->running();bridge_->stop();
     const bool changedServer=bridgeConfig.serverHost!=address||bridgeConfig.serverPort!=port;bridgeConfig.serverHost=address;bridgeConfig.serverPort=port;
     if(changedServer){
-        bridgeConfig.accountId=0;bridgeConfig.password.clear();bridgeConfig.target=0;bridgeConfig.groupId=0;bridgeConfig.autoStart=false;boardId_=0;QSettings().setValue("board_account_id",0);
+        bridgeConfig.accountId=0;bridgeConfig.password.clear();bridgeConfig.gptAccountId=0;bridgeConfig.gptPassword.clear();bridgeConfig.target=0;bridgeConfig.groupId=0;bridgeConfig.autoStart=false;boardId_=0;QSettings().setValue("board_account_id",0);
         // IDs belong to one server. A new page must not reapply the previous server's draft settings.
         if(boardPanel_){settingsStack_->removeWidget(boardPanel_);boardPanel_->deleteLater();boardPanel_=nullptr;}
     }

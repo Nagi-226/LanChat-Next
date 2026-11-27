@@ -6,6 +6,7 @@
 #include "net/transfer_manager.h"
 #include "model/store.h"
 #include "ui/settings_panel.h"
+#include "ui/board_connection_panel.h"
 #include "ui/main_window.h"
 #include "ui/theme.h"
 #include "test_assert.h"
@@ -27,6 +28,7 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
+#include <QTabBar>
 #include <functional>
 static bool waitFor(const std::function<bool()>& test){QElapsedTimer time;time.start();while(time.elapsed()<5000){QCoreApplication::processEvents();if(test())return true;QTest::qWait(10);}return false;}
 int main(int argc,char** argv){
@@ -46,6 +48,59 @@ int main(int argc,char** argv){
     QTcpServer http;assert(http.listen(QHostAddress::LocalHost));int calls=0,code=200;QString method;QObject::connect(&http,&QTcpServer::newConnection,&app,[&]{auto* socket=http.nextPendingConnection();QObject::connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{const auto input=socket->readAll();if(!input.contains("\r\n\r\n"))return;++calls;method=QString::fromLatin1(input.left(input.indexOf('\r')));QByteArray body=code==200?QByteArray("{\"data\":[{\"id\":\"fixture\"}]}"):QByteArray("{\"error\":\"never-export-this-secret\"}");socket->write("HTTP/1.1 "+QByteArray::number(code)+" Test\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n\r\n"+body);socket->disconnectFromHost();});});
     auto c=bridge->config();c.aiKey=secret;c.aiProvider="openai";c.aiEndpoint=QString("http://127.0.0.1:%1/v1").arg(http.serverPort());c.aiModel="fixture";bridge->configure(c);
     auto* detect=panel->findChild<QPushButton*>("aiEndpointCheck");detect->click();assert(waitFor([&]{return calls==1&&detect->isEnabled();}));assert(method=="GET /v1/models HTTP/1.1");assert(panel->findChild<QLabel*>("settingsFeedback")->text().contains("找到"));code=429;detect->click();assert(waitFor([&]{return calls==2&&detect->isEnabled();}));assert(panel->findChild<QLabel*>("settingsFeedback")->text().contains("429")&&!panel->findChild<QLabel*>("settingsFeedback")->text().contains(secret));
+    QSettings().setValue("board_ai/enabled",true);
+    BoardConnection migrated(nullptr,temp.path()+"/migrated");
+    assert(migrated.aiProfile(0).key==secret&&migrated.aiProfile(0,true).key==secret);
+    assert(migrated.aiProfile(0,true).verifiedAt==0&&migrated.aiProfile(1).key.isEmpty());
+    assert(migrated.aiProfile(1).endpoint=="https://agentrouter.org/v1"&&migrated.aiProfile(1).model=="gpt-6.2-sol");
+    BoardConnectionPanel profiles(&migrated);
+    auto* tabs=profiles.findChild<QTabBar*>("boardAiProfiles");
+    auto* endpoint=profiles.findChild<QLineEdit*>("boardAiEndpoint");
+    auto* model=profiles.findChild<QLineEdit*>("boardAiModel");
+    auto* key=profiles.findChild<QLineEdit*>("boardAiKey");
+    auto* save=profiles.findChild<QPushButton*>("boardAiSaveProfile");
+    auto* probe=profiles.findChild<QPushButton*>("boardAiTestProfile");
+    auto* restore=profiles.findChild<QPushButton*>("boardAiRestoreProfile");
+    assert(tabs&&tabs->count()==3&&endpoint&&model&&key&&save&&probe&&restore);
+    tabs->setCurrentIndex(1);assert(key->text().isEmpty());key->setText("gpt-fixture");save->click();
+    tabs->setCurrentIndex(2);assert(endpoint->text().isEmpty()&&key->text().isEmpty());
+    endpoint->setText("https://example.invalid/v1");model->setText("third-fixture");save->click();
+    tabs->setCurrentIndex(0);
+    assert(model->text()=="fixture"&&key->text().isEmpty()&&restore->isEnabled());
+    assert(migrated.aiProfile(1).key=="gpt-fixture"&&migrated.aiProfile(2).model=="third-fixture");
+    const QByteArray disk=QSettings().value("board_ai_profiles/1/draft").toMap().value("secret").toByteArray();
+    assert(!disk.isEmpty()&&!disk.contains("gpt-fixture"));
+    QTcpServer generation;assert(generation.listen(QHostAddress::LocalHost));
+    int probes=0, probeCode=200;bool requestsCorrect=true;
+    QObject::connect(&generation,&QTcpServer::newConnection,&app,[&]{
+        auto* socket=generation.nextPendingConnection();
+        QObject::connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{
+            auto data=socket->property("request").toByteArray()+socket->readAll();
+            const auto split=data.indexOf("\r\n\r\n");
+            const auto head=data.left(split);
+            int length=0;
+            for(const auto& line:head.split('\n'))
+                if(line.toLower().startsWith("content-length:"))length=line.mid(15).trimmed().toInt();
+            if(split<0||data.size()<split+4+length){socket->setProperty("request",data);return;}
+            requestsCorrect=requestsCorrect&&data.startsWith("POST /v1/chat/completions HTTP/1.1\r\n")
+                &&!data.contains("gpt-fixture")&&!data.contains(secret.toUtf8());
+            ++probes;
+            const QByteArray body=probeCode==200?"{\"choices\":[{\"message\":{\"content\":\"OK\"}}]}":"{\"error\":{\"message\":\"fixture\"}}";
+            socket->write("HTTP/1.1 "+QByteArray::number(probeCode)+" Test\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n\r\n"+body);
+            socket->disconnectFromHost();
+        });
+    });
+    endpoint->setText(QString("http://127.0.0.1:%1/v1").arg(generation.serverPort()));
+    probe->click();QTest::qWait(40);assert(probes==0&&migrated.config().aiKey==secret);
+    key->setText("new-ds-fixture");probe->click();
+    assert(waitFor([&]{return probes==1&&probe->isEnabled();}));
+    assert(migrated.aiProfile(0,true).verifiedAt>0&&migrated.config().aiKey=="new-ds-fixture");
+    probeCode=401;key->setText("wrong-ds-fixture");probe->click();
+    assert(waitFor([&]{return probes==2&&probe->isEnabled();}));
+    assert(migrated.aiProfile(0).key=="wrong-ds-fixture"&&migrated.aiProfile(0,true).key=="new-ds-fixture");
+    assert(requestsCorrect&&migrated.config().aiKey=="new-ds-fixture");
+    restore->click();BoardConnection profileReload(nullptr,temp.path()+"/profile-reload");
+    assert(profileReload.aiProfile(0).key=="new-ds-fixture"&&profileReload.aiProfile(1).key=="gpt-fixture"&&profileReload.aiProfile(2).model=="third-fixture");
     panel->setSection(4);panel->findChild<QSpinBox*>("font_scale")->setValue(125);panel->findChild<QComboBox*>("board_default_page")->setCurrentIndex(3);panel->findChild<QCheckBox*>("log_follow")->setChecked(false);panel->findChild<QPushButton*>("saveDisplay")->click();assert(QSettings().value("preferences/font_scale").toInt()==125&&QSettings().value("preferences/board_default_page").toString()=="ppm");assert(app.styleSheet()==preferences::scaledStyleSheet(125));
     const auto args=app.arguments();if(args.contains("--capture-dir")){const auto dir=args.value(args.indexOf("--capture-dir")+1);QDir().mkpath(dir);const QStringList ids={"accountSettingsButton","notificationSettingsButton","storageSettingsButton","aiSettingsButton","displaySettingsButton","aboutSettingsButton"};for(int i=0;i<6;++i){window.findChild<QPushButton*>(ids[i])->click();QTest::qWait(100);assert(window.grab().save(dir+QString("/settings-%1.png").arg(i)));}}
     for(int percent:{100,125,150})for(int width:{950,1300}){QSettings().setValue("preferences/font_scale",percent);preferences::applyDisplay();window.resize(width,800);window.findChild<QPushButton*>("aiSettingsButton")->click();QTest::qWait(100);auto* hint=panel->findChild<QLabel*>("aiLimitHint");assert(hint->height()>=hint->heightForWidth(hint->width()));}

@@ -3,6 +3,7 @@
 #include "net/session.h"
 #include <QPlainTextEdit>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QCheckBox>
 #include <QDateTime>
 #include <QFileDialog>
@@ -12,6 +13,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QNetworkInterface>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTimer>
@@ -21,6 +25,8 @@
 #include <QStandardItemModel>
 #include <QGridLayout>
 #include <QTabWidget>
+#include <QTabBar>
+#include <QUrl>
 #include "ui/board_logs_panel.h"
 
 BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* parent, Session* session)
@@ -89,7 +95,29 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     form->addRow("告警群 ID", group_);
     account_ = new QLabel(this);
     account_->setWordWrap(true);
-    form->addRow("专用板端账号", account_);
+    form->addRow("DeepSeek 板端账号", account_);
+    auto* gptId = spin(2147483647, config.gptAccountId, "boardGptAccountId");
+    gptId->setSpecialValueText("不连接 GPT 账号");
+    auto* gptPassword = new QLineEdit(this);
+    gptPassword->setObjectName("boardGptAccountPassword");
+    gptPassword->setEchoMode(QLineEdit::Password);
+    gptPassword->setPlaceholderText(config.gptPassword.isEmpty()?"填写 LanChat 账号密码（与 API Key 分开）":"已加密保存，留空保留");
+    auto* gptState = new QLabel(this);
+    gptState->setWordWrap(true);
+    form->addRow("GPT 板端账号 ID",gptId);
+    form->addRow("GPT 板端账号密码",gptPassword);
+    form->addRow("GPT 单聊状态",gptState);
+    const auto refreshGpt = [this,gptState] {
+        const auto& current = bridge_->config();
+        const auto data = bridge_->snapshot();
+        const auto ai = data.value("gpt_ai").toObject();
+        const auto online = data.value("gpt_lanchat_state").toString();
+        if (!current.gptAccountId) gptState->setText("尚未绑定 GPT 的 LanChat 账号。");
+        else if (online.isEmpty()) gptState->setText("等待 GPT 桥启动；请验证 GPT 配置并保存连接。");
+        else gptState->setText(online + (ai.isEmpty()?QString(): " · " + ai.value("model").toString()));
+    };
+    connect(bridge_,&BoardConnection::changed,gptState,refreshGpt);
+    refreshGpt();
     automatic_ = new QCheckBox("启动 LanChat 时自动连接板端桥", this);
     automatic_->setObjectName("boardAutoStart");
     automatic_->setChecked(config.autoStart);
@@ -111,11 +139,18 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     layout->addWidget(aiTitle);
     aiEnabled_=new QCheckBox("启用文字自由问答",this);aiEnabled_->setObjectName("boardAiEnabled");aiEnabled_->setChecked(config.aiEnabled);
     layout->addWidget(aiEnabled_);
+    auto* aiEditor=new QWidget(this);
+    auto* aiLayout=new QVBoxLayout(aiEditor);
+    aiLayout->setContentsMargins(0,0,0,0);
+    auto* aiSlots=new QTabBar(aiEditor);
+    aiSlots->setObjectName("boardAiProfiles");
+    for(int i=0;i<BoardConnection::AiProfileCount;++i)aiSlots->addTab(BoardConnection::aiProfileName(i));
+    aiLayout->addWidget(aiSlots);
     auto* aiForm=new QFormLayout;aiForm->setVerticalSpacing(10);
     aiProvider_=new QComboBox(this);aiProvider_->setObjectName("boardAiProvider");
     aiProvider_->addItem("Anthropic 兼容（含 DeepSeek）","anthropic");aiProvider_->addItem("OpenAI 兼容","openai");
     aiProvider_->setCurrentIndex(config.aiProvider=="openai"?1:0);
-    aiEndpoint_=new QLineEdit(config.aiEndpoint,this);aiEndpoint_->setObjectName("boardAiEndpoint");aiEndpoint_->setPlaceholderText("例如 https://api.deepseek.com/anthropic");
+    aiEndpoint_=new QLineEdit(config.aiEndpoint,this);aiEndpoint_->setObjectName("boardAiEndpoint");aiEndpoint_->setPlaceholderText("输入服务商提供的接口地址");
     aiModel_=new QLineEdit(config.aiModel,this);aiModel_->setObjectName("boardAiModel");aiModel_->setPlaceholderText("服务商提供的模型名称");
     aiReasoningEffort_=new QComboBox(this);aiReasoningEffort_->setObjectName("boardAiReasoningEffort");
     aiReasoningEffort_->addItem("按模型默认","");aiReasoningEffort_->addItem("关闭思考（none）","none");
@@ -127,7 +162,105 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     aiReasoningEffort_->setToolTip("仅用于支持 reasoning_effort 的 OpenAI 兼容模型。商汤 deepseek-flash 选 none 可减少等待，避免思考占满输出上限。");
     aiKey_=new QLineEdit(this);aiKey_->setObjectName("boardAiKey");aiKey_->setEchoMode(QLineEdit::Password);
     aiKey_->setPlaceholderText(config.aiKey.isEmpty()?"输入 API 密钥":"密钥已加密保存，留空保留");
-    aiForm->addRow("接口协议",aiProvider_);aiForm->addRow("接口地址",aiEndpoint_);aiForm->addRow("模型",aiModel_);aiForm->addRow("思考强度",aiReasoningEffort_);aiForm->addRow("API 密钥",aiKey_);layout->addLayout(aiForm);
+    aiForm->addRow("接口协议",aiProvider_);aiForm->addRow("接口地址",aiEndpoint_);aiForm->addRow("模型",aiModel_);aiForm->addRow("思考强度",aiReasoningEffort_);aiForm->addRow("API 密钥",aiKey_);aiLayout->addLayout(aiForm);
+    auto* saveAi=new QPushButton("保存配置",aiEditor);saveAi->setObjectName("boardAiSaveProfile");
+    auto* testAi=new QPushButton(aiEditor);testAi->setObjectName("boardAiTestProfile");
+    auto* restoreAi=new QPushButton("恢复上次通过的配置",aiEditor);restoreAi->setObjectName("boardAiRestoreProfile");
+    auto* profileActions=new QHBoxLayout;
+    profileActions->addWidget(saveAi);profileActions->addWidget(testAi);profileActions->addWidget(restoreAi);profileActions->addStretch();
+    aiLayout->addLayout(profileActions);
+    auto* aiFeedback=new QLabel(aiEditor);aiFeedback->setObjectName("boardAiProfileFeedback");aiFeedback->setWordWrap(true);
+    aiLayout->addWidget(aiFeedback);layout->addWidget(aiEditor);
+    auto showProfile=[this,aiSlots,restoreAi,testAi,aiFeedback](int slot) {
+        const auto profile=bridge_->aiProfile(slot);
+        const auto verified=bridge_->aiProfile(slot,true);
+        aiProvider_->setCurrentIndex(qMax(0,aiProvider_->findData(profile.provider)));
+        aiEndpoint_->setText(profile.endpoint);aiModel_->setText(profile.model);
+        aiReasoningEffort_->setCurrentIndex(qMax(0,aiReasoningEffort_->findData(profile.reasoningEffort)));
+        aiKey_->clear();
+        aiKey_->setPlaceholderText(profile.key.isEmpty()?"输入 API 密钥":"此配置的密钥已加密保存");
+        const bool canRestore=!verified.endpoint.isEmpty()&&!verified.key.isEmpty();
+        restoreAi->setEnabled(canRestore);
+        restoreAi->setText(canRestore&&verified.verifiedAt<=0?"恢复迁移时的配置":"恢复上次通过的配置");
+        testAi->setText(slot==0?"验证并应用":"验证配置");
+        const QString owner=slot==0?"当前桥账号：RoboMind-S3_DS":slot==1?"独立私聊账号：RoboMind-S3_GPT":"预留配置";
+        aiFeedback->setText(verified.verifiedAt>0?owner+" · 验证通过："+QDateTime::fromMSecsSinceEpoch(verified.verifiedAt).toString("yyyy-MM-dd HH:mm"):canRestore?owner+" · 已迁移当前配置":owner);
+    };
+    connect(aiSlots,&QTabBar::currentChanged,this,showProfile);
+    showProfile(0);
+    const auto readProfile=[this,aiSlots] {
+        const auto existing=bridge_->aiProfile(aiSlots->currentIndex());
+        const auto provider=aiProvider_->currentData().toString();
+        const auto endpoint=aiEndpoint_->text().trimmed();
+        const auto key=aiKey_->text().trimmed();
+        return BoardConnection::AiProfile{provider,endpoint,aiModel_->text().trimmed(),
+            key.isEmpty()&&existing.endpoint==endpoint&&existing.provider==provider?existing.key:key,
+            provider=="openai"?aiReasoningEffort_->currentData().toString():QString()};
+    };
+    connect(saveAi,&QPushButton::clicked,this,[this,aiSlots,readProfile,showProfile,aiFeedback] {
+        const int slot=aiSlots->currentIndex();
+        if(!bridge_->saveAiProfile(slot,readProfile())){aiFeedback->setText("无法保存此配置。");return;}
+        showProfile(slot);aiFeedback->setText("配置已保存；当前运行的模型没有改动。");
+    });
+    connect(restoreAi,&QPushButton::clicked,this,[this,aiSlots,showProfile,aiFeedback] {
+        const int slot=aiSlots->currentIndex();
+        const auto profile=bridge_->aiProfile(slot,true);
+        if(profile.endpoint.isEmpty()||profile.key.isEmpty()||!bridge_->saveAiProfile(slot,profile)){aiFeedback->setText("无法恢复此配置。");return;}
+        showProfile(slot);aiFeedback->setText("已恢复表单；当前桥的运行配置没有改动。");
+    });
+    auto* probe=new QNetworkAccessManager(aiEditor);
+    connect(testAi,&QPushButton::clicked,this,[this,aiSlots,aiEditor,probe,aiFeedback,readProfile,showProfile] {
+        const int slot=aiSlots->currentIndex();
+        auto profile=readProfile();
+        const QUrl url(profile.endpoint);
+        const bool local=url.host()=="127.0.0.1"||url.host()=="localhost"||url.host()=="::1";
+        if(!url.isValid()||url.host().isEmpty()||!url.userInfo().isEmpty()||url.hasFragment()||url.hasQuery()
+           ||(url.scheme()!="https"&&!(local&&url.scheme()=="http"))||profile.model.isEmpty()||profile.key.isEmpty()){
+            aiFeedback->setText("请输入有效的接口地址、模型和此地址的 API 密钥。地址改变后需重新填写密钥。");return;
+        }
+        if(!bridge_->saveAiProfile(slot,profile)){aiFeedback->setText("无法加密保存配置。");return;}
+        const bool anthropic=profile.provider=="anthropic";
+        const QString suffix=anthropic?"/messages":"/chat/completions";
+        QString resolved=profile.endpoint;
+        while(resolved.endsWith('/'))resolved.chop(1);
+        if(!resolved.endsWith(suffix))resolved+=(resolved.endsWith("/v1")?suffix:"/v1"+suffix);
+        QNetworkRequest request{QUrl(resolved)};
+        request.setHeader(QNetworkRequest::ContentTypeHeader,"application/json");
+        request.setRawHeader("Authorization","Bearer "+profile.key.toUtf8());
+        if(anthropic)request.setRawHeader("anthropic-version","2023-06-01");
+        request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::ManualRedirectPolicy);
+        request.setTransferTimeout(25000);
+        QJsonObject payload{{"model",profile.model},{"max_tokens",qMin(bridge_->config().aiMaxTokens,512)},
+            {"stream",false},{"messages",QJsonArray{QJsonObject{{"role","user"},{"content","Reply with OK."}}}}};
+        if(!anthropic&&!profile.reasoningEffort.isEmpty())payload.insert("reasoning_effort",profile.reasoningEffort);
+        auto* reply=probe->post(request,QJsonDocument(payload).toJson(QJsonDocument::Compact));
+        auto* deadline=new QTimer(reply);deadline->setSingleShot(true);
+        connect(deadline,&QTimer::timeout,reply,&QNetworkReply::abort);deadline->start(25000);
+        reply->setReadBufferSize(65537);
+        connect(reply,&QNetworkReply::readyRead,reply,[reply]{if(reply->bytesAvailable()>65536)reply->abort();});
+        aiEditor->setEnabled(false);aiFeedback->setText("正在请求一条测试回复…");
+        connect(reply,&QNetworkReply::finished,this,[this,reply,slot,profile,anthropic,aiEditor,aiFeedback,showProfile]() mutable {
+            const auto raw=reply->readAll();
+            const auto body=QJsonDocument::fromJson(raw.left(65536)).object();
+            const auto items=body.value(anthropic?"content":"choices").toArray();
+            QString answer;
+            for(const auto& item:items)answer+=anthropic?item.toObject().value("text").toString():
+                item.toObject().value("message").toObject().value("content").toString();
+            const int status=reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const bool ok=reply->error()==QNetworkReply::NoError&&status>=200&&status<300&&raw.size()<=65536&&!answer.trimmed().isEmpty();
+            reply->deleteLater();
+            aiEditor->setEnabled(true);
+            showProfile(slot);
+            if(!ok){aiFeedback->setText(status?QString("验证未通过（HTTP %1），已保留原来的可用配置。").arg(status):"验证未通过，已保留原来的可用配置。");return;}
+            profile.verifiedAt=QDateTime::currentMSecsSinceEpoch();
+            if(!bridge_->saveAiProfile(slot,profile,true)){aiFeedback->setText("接口已响应，但无法保存验证结果。");return;}
+            if(slot==0){bridge_->applyPrimaryAiProfile(profile);aiEnabled_->setChecked(true);}
+            else if(slot==1)bridge_->applyGptAiProfile();
+            showProfile(slot);
+            aiFeedback->setText(slot==0?"验证通过，DeepSeek 账号已应用此配置。":
+                slot==1&&bridge_->config().gptAccountId>0?"验证通过，已保存 GPT 单聊配置。":"验证通过，配置已保存。");
+        });
+    });
     auto* aiHint=new QLabel("私聊专用板端账号可直接提问，例如「现在没检测到人是什么原因？」；群聊用 /AI 问题。\n每次刷新感知、链路和设备状态，不上传图像或完整日志。模型上下文最多三轮，仅留内存，10 分钟无活动清空；聊天记录按 LanChat 保存。模型服务可能计费。",this);
     aiHint->setWordWrap(true);aiHint->setStyleSheet("color:#8A94A4;background:transparent;");layout->addWidget(aiHint);
     aiState_=new QLabel(this);aiState_->setObjectName("boardAiState");aiState_->setWordWrap(true);layout->addWidget(aiState_);
@@ -182,21 +315,21 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
         delivery_->setText("正在提交到 LanChat…"); send_->setEnabled(false);
     });
     connect(message_, &QPlainTextEdit::textChanged, this, &BoardConnectionPanel::refresh);
-    auto* whaleTitle=new QLabel("鲸鱼娘沉浸模式",this);
+    auto* whaleTitle=new QLabel("板端角色 · 沉浸模式",this);
     whaleTitle->setStyleSheet("font-size:16px;font-weight:600;color:#E7EDF7;background:transparent;");layout->addWidget(whaleTitle);
-    auto* whaleHint=new QLabel("启动时短暂展示角色；沉浸模式下，LanChat 文字回答会同步到板端字幕与扬声器。\n语音由桥接 PC 合成，可选择本机少女声线或 Windows 中文语音，可停止或用新问题打断。",this);whaleHint->setWordWrap(true);layout->addWidget(whaleHint);
-    auto* voice=new QComboBox(this);voice->setObjectName("boardWhaleVoice");voice->addItem("自动选择（优先本机少女声线）","auto");voice->addItem("Windows 中文语音","windows");voice->addItem("派蒙风格少女（本地 VITS）","local_vits");
+    auto* whaleHint=new QLabel("鲸鱼娘使用深蓝主题，GPT 白龙娘使用银白主题。文字回答同步到板端字幕和扬声器。\n模型渠道在「AI 状态问答」设置。",this);whaleHint->setWordWrap(true);layout->addWidget(whaleHint);
+    auto* voice=new QComboBox(this);voice->setObjectName("boardWhaleVoice");voice->addItem("自动选择（优先角色声线）","auto");voice->addItem("Windows 中文语音","windows");voice->addItem("角色声线（本地 VITS）","local_vits");
     voice->setCurrentIndex(qMax(0,voice->findData(bridge_->config().voiceProvider)));layout->addWidget(voice);
-    voice->setToolTip("切换声线会重新连接板端桥并停止当前语音。少女模型单独安装在桥接 PC；未安装时自动使用 Windows 语音。");
+    voice->setToolTip("切换语音设置会重新连接板端桥。新版角色声线需安装在桥接 PC：鲸鱼娘为派蒙风格，GPT 白龙娘为优菈风格。");
     const auto updateVoice=[this,voice]{if(auto* model=qobject_cast<QStandardItemModel*>(voice->model()))model->item(2)->setEnabled(bridge_->localVoiceAvailable());};
     connect(bridge_,&BoardConnection::changed,voice,updateVoice);updateVoice();
     connect(voice,QOverload<int>::of(&QComboBox::activated),this,[this,voice]{if(!bridge_->setVoiceProvider(voice->currentData().toString()))voice->setCurrentIndex(qMax(0,voice->findData(bridge_->config().voiceProvider)));});
     auto* whaleButtons=new QGridLayout;
     int whaleIndex=0;
-    for(const auto& item:QList<QPair<QString,QString>>{{"进入沉浸模式","immersion"},{"返回五页终端","terminal"},{"扬声器短音测试","audio_test"},{"停止说话","stop_speech"}}){
+    for(const auto& item:QList<QPair<QString,QString>>{{"鲸鱼娘 · 深蓝","immersion"},{"GPT 白龙娘 · 银白","immersion_dragon"},{"返回五页终端","terminal"},{"扬声器短音测试","audio_test"},{"停止说话","stop_speech"}}){
         auto* button=new QPushButton(item.first,this);button->setObjectName("boardWhale_"+item.second);whaleButtons->addWidget(button,whaleIndex/2,whaleIndex%2);++whaleIndex;
         connect(button,&QPushButton::clicked,this,[this,action=item.second]{if(!bridge_->navigate(action))stats_->setText("板端未就绪或不支持沉浸模式，请检查连接和固件。");});
-        const auto enableWhale=[this,button,action=item.second]{const auto d=bridge_->snapshot().value("display").toObject();button->setEnabled(d.value("terminal_ready").toBool()&&d.value("immersion_supported").toBool()&&(action!="audio_test"||d.value("pcm_supported").toBool()));};
+        const auto enableWhale=[this,button,action=item.second]{const auto d=bridge_->snapshot().value("display").toObject();button->setEnabled(d.value("terminal_ready").toBool()&&d.value("navigation").toBool()&&d.value("immersion_supported").toBool()&&(action!="immersion_dragon"||d.value("dragon_supported").toBool())&&(action!="audio_test"||d.value("pcm_supported").toBool()));};
         connect(bridge_,&BoardConnection::changed,button,enableWhale);enableWhale();
     }
     layout->addLayout(whaleButtons);
@@ -205,7 +338,15 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     const auto updateVolume=[this,volume]{const auto d=bridge_->snapshot().value("display").toObject();volume->setEnabled(d.value("terminal_ready").toBool()&&d.value("pcm_supported").toBool());const auto index=volume->findData(d.value("view").toObject().value("volume").toInt(20));if(index>=0)volume->setCurrentIndex(index);};
     connect(bridge_,&BoardConnection::changed,volume,updateVolume);updateVolume();
     auto* speechStatus=new QLabel(this);speechStatus->setObjectName("boardWhaleSpeechStatus");speechStatus->setWordWrap(true);layout->addWidget(speechStatus);
-    const auto updateSpeech=[this,speechStatus]{const auto s=bridge_->snapshot().value("speech").toObject();const auto view=bridge_->snapshot().value("display").toObject().value("view").toObject();speechStatus->setText(QString("板端界面：%1 · 语音状态：%2 · 已完成 %3 段\n声线：%4\n%5").arg(view.value("immersion").toBool()?"鲸鱼娘":"五页终端",s.value("stage").toString("未连接")).arg(s.value("completed_segments").toInt()).arg(s.value("voice").toString("待连接")).arg(s.value("last_error").toString()));};
+    const auto updateSpeech=[this,speechStatus]{
+        const auto s=bridge_->snapshot().value("speech").toObject();
+        const auto view=bridge_->snapshot().value("display").toObject().value("view").toObject();
+        const QString name=!view.value("immersion").toBool()?"五页终端":
+            view.value("persona").toString()=="dragon"?"GPT 白龙娘":"鲸鱼娘";
+        speechStatus->setText(QString("板端界面：%1 · 语音状态：%2 · 已完成 %3 段\n声线：%4\n%5")
+            .arg(name,s.value("stage").toString("未连接")).arg(s.value("completed_segments").toInt())
+            .arg(s.value("voice").toString("待连接")).arg(s.value("last_error").toString()));
+    };
     connect(bridge_,&BoardConnection::changed,speechStatus,updateSpeech);updateSpeech();
     if (session_) connect(session_, &Session::messageReceived, this, [this](const QJsonObject& message) {
         if (pendingText_.isEmpty() || message.value("fromId").toInt() != session_->selfId()
@@ -228,20 +369,33 @@ BoardConnectionPanel::BoardConnectionPanel(BoardConnection* bridge, QWidget* par
     actions->addStretch();
     actions->addWidget(close);
     outer->addLayout(actions);
-    connect(start, &QPushButton::clicked, this, [this] {
+    connect(start, &QPushButton::clicked, this, [this,gptId,gptPassword,gptState] {
         auto config = bridge_->config();
         config.listenPort = static_cast<quint16>(port_->value());
         config.target = target_->value();
         config.groupId = group_->value();
         config.autoStart = automatic_->isChecked();
         config.consolePath = consolePath_->text();
-        config.aiEnabled=aiEnabled_->isChecked();config.aiProvider=aiProvider_->currentData().toString();
-        config.aiEndpoint=aiEndpoint_->text().trimmed();config.aiModel=aiModel_->text().trimmed();
-        config.aiReasoningEffort=aiReasoningEffort_->currentData().toString();
-        if(!aiKey_->text().isEmpty())config.aiKey=aiKey_->text().trimmed();
+        config.aiEnabled=aiEnabled_->isChecked();
+        const int gptIdValue=gptId->value();
+        if (gptIdValue>0 && gptIdValue==config.accountId) {
+            gptState->setText("GPT 必须使用另一个 LanChat 账号 ID。");
+            gptId->setFocus();
+            return;
+        }
+        if (gptIdValue!=config.gptAccountId) config.gptPassword.clear();
+        config.gptAccountId=gptIdValue;
+        if (!gptIdValue) config.gptPassword.clear();
+        else if (!gptPassword->text().isEmpty()) config.gptPassword=gptPassword->text();
+        if (gptIdValue>0 && config.gptPassword.isEmpty()) {
+            gptState->setText("请填写 GPT 的 LanChat 账号密码。");
+            gptPassword->setFocus();
+            return;
+        }
         bridge_->configure(config);
-        aiKey_->clear();aiKey_->setPlaceholderText(config.aiKey.isEmpty()?"输入 API 密钥":"密钥已加密保存，留空保留");
         bridge_->start();
+        gptPassword->clear();
+        gptPassword->setPlaceholderText(config.gptPassword.isEmpty()?"填写 LanChat 账号密码（与 API Key 分开）":"已加密保存，留空保留");
     });
     connect(stop, &QPushButton::clicked, bridge_, &BoardConnection::stop);
     connect(close, &QPushButton::clicked, this, &BoardConnectionPanel::returnRequested);

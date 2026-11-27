@@ -1,5 +1,7 @@
 # 鲸鱼娘：启动展示与沉浸模式
 
+2026-11-27 增加 **GPT 白龙娘 · 银白**。两种角色可在同一区域手动切换；双账号同时登录时，发给 `RoboMind-S3_DS` 或 `RoboMind-S3_GPT` 的私聊文字也会切到对应角色。完整回答留在原私聊，字幕和声音随板端已确认的角色呈现。设定图、标签和本机验证见[白龙娘板端说明](https://github.com/Nagi-226/RoboMind-S3/blob/master/docs/gpt-dragon-display.md)。
+
 2026-11-24（Asia/Shanghai）。初版已接入 LanChat、Console 和 COM3 的 RoboMind-S3。源码与本机版本为 **2026.11.24.2**，鲸鱼娘初版随本轮主分支更新，现有完整安装包仍为 2026.11.23.2。
 
 音质优化已通过固定音源 / 网络停顿和实板回归，用户已确认“音效合格”，本轮合入三仓主分支。详细参数与听音验收见 [S3 音质记录](https://github.com/Nagi-226/RoboMind-S3/blob/master/docs/audio-quality-20261124.md)。

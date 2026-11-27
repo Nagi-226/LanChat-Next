@@ -28,6 +28,11 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
     app.setApplicationName("LanChat-Qt");
     app.setOrganizationName("LanChat");
+    // Run the profile migration without connecting to the chat server or any model.
+    if(app.arguments().contains("--prepare-ai-profiles")){
+        BoardConnection bridge;
+        return bridge.config().aiEndpoint.isEmpty()||!bridge.aiProfile(0).endpoint.isEmpty()?0:3;
+    }
     // 只读检查：不登录聊天、不启动主机、不提交生成请求，输出只有脱敏检测结论。
     if(app.arguments().contains("--check-ai-models")){
         BoardConnection bridge;Session session;TransferManager transfers(&session);SettingsPanel panel(&session,&bridge,&transfers);

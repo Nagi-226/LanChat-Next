@@ -164,7 +164,7 @@ QWidget* ContactsPanel::makeRow(const ContactItem& it, bool isGroup)
     bar->setFixedWidth(3);
     bar->setVisible(it.id == selectedId_ && isGroup==selectedGroup_);
     h->addWidget(bar);
-    h->addWidget(new Avatar(it.name, 34, row));
+    h->addWidget(new Avatar(it.name, 34, row, it.avatarId));
     auto* mid = new QVBoxLayout;
     mid->setSpacing(2);
     auto* name = new QLabel(it.name, row);

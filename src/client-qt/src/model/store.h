@@ -12,6 +12,7 @@ struct Contact {
     int id = 0;
     QString nickname;
     bool online = false;
+    int avatarId = 0;
 };
 
 struct Message {
@@ -33,7 +34,8 @@ public:
 
     // 登录成功后告知自己的 id，direct 会话才能按"对方 id"归档
     void setSelfId(int id);
-    void upsertContact(int id, const QString& nickname, bool online);
+    void upsertContact(int id, const QString& nickname, bool online, int avatarId = 0);
+    int avatarId(int id) const { return contacts_.value(id).avatarId; }
     void setOnline(int id, bool online);
     bool addMessage(const Message& m);
     void clear();

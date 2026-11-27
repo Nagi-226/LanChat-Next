@@ -158,7 +158,7 @@ void ChatView::setSelfId(int id) { selfId_ = id; }
 void ChatView::setPeerLabel(const QString& text) { peer_->setText(text); }
 
 void ChatView::appendMessage(int fromId, const QString& senderName, const QString& text,
-                             qint64 ts, bool grouped, int alertLevel)
+                             qint64 ts, bool grouped, int alertLevel, int avatarId)
 {
     empty_->hide();
     const bool mine = (fromId == selfId_);
@@ -169,7 +169,7 @@ void ChatView::appendMessage(int fromId, const QString& senderName, const QStrin
     h->setSpacing(8);
     if (mine) h->setDirection(QBoxLayout::RightToLeft);
 
-    if (!grouped) h->addWidget(new Avatar(senderName, 32, row));
+    if (!grouped) h->addWidget(new Avatar(senderName, 32, row, avatarId));
 
     auto* col = new QVBoxLayout;
     col->setSpacing(4);

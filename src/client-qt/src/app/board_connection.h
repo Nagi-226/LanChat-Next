@@ -11,6 +11,11 @@
 class BoardConnection : public QObject {
     Q_OBJECT
 public:
+    struct AiProfile {
+        QString provider, endpoint, model, key, reasoningEffort;
+        qint64 verifiedAt = 0;
+    };
+    static constexpr int AiProfileCount = 3;
     struct Config {
         bool autoStart = false;
         quint16 listenPort = 9000;
@@ -20,6 +25,8 @@ public:
         int groupId = 0;
         int accountId = 0;
         QString password;
+        int gptAccountId = 0;
+        QString gptPassword;
         QString consolePath;
         QString voiceProvider="auto";
         bool logEnabled = false;
@@ -33,6 +40,11 @@ public:
     ~BoardConnection() override;
     const Config& config() const { return cfg_; }
     void configure(const Config& config);
+    AiProfile aiProfile(int slot, bool verified = false) const;
+    bool saveAiProfile(int slot, const AiProfile& profile, bool verified = false);
+    void applyPrimaryAiProfile(const AiProfile& profile);
+    void applyGptAiProfile();
+    static QString aiProfileName(int slot);
     void start();
     void stop();
     void setDefaultRecipient(int uid);
@@ -51,6 +63,7 @@ signals:
     void accountChanged(int uid);
     void logsChanged();
 private:
+    void migrateAiProfiles();
     void saveConfig();
     void launchConsole();
     void readRegistration();

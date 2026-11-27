@@ -24,7 +24,7 @@ public:
     // grouped=true 时隐藏头像与名字行、收紧上间距
     // alertLevel>0 时渲染为板端告警卡片（1提示/2警告/3严重），不用普通气泡
     void appendMessage(int fromId, const QString& senderName, const QString& text,
-                       qint64 ts, bool grouped, int alertLevel = 0);
+                       qint64 ts, bool grouped, int alertLevel = 0, int avatarId = 0);
     void clear();
     void setGroup(bool group);
     void setHistoryAvailable(bool available);

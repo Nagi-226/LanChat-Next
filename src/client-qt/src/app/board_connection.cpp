@@ -32,6 +32,7 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
     cfg_.aiMaxTokens=s.value("board_ai/max_tokens",1200).toInt();cfg_.aiTimeoutSeconds=s.value("board_ai/timeout_seconds",45).toInt();
     cfg_.aiDailyLimit=s.value("board_ai/daily_limit",100).toInt();cfg_.aiIntervalSeconds=s.value("board_ai/interval_seconds",2).toInt();cfg_.aiConcurrency=s.value("board_ai/concurrency",4).toInt();
     cfg_.aiKey = credentials::decryptSecret(s.value("board_ai/secret").toByteArray());
+    migrateAiProfiles();
     cfg_.listenPort = static_cast<quint16>(s.value("board_bridge/listen_port", 9000).toUInt());
     cfg_.serverHost = s.value("board_bridge/server_host", "127.0.0.1").toString();
     cfg_.serverPort = static_cast<quint16>(s.value("board_bridge/server_port", 12346).toUInt());
@@ -39,6 +40,8 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
     cfg_.groupId = s.value("board_bridge/group_id", 0).toInt();
     cfg_.accountId = s.value("board_bridge/account_id", 0).toInt();
     cfg_.password = credentials::decryptSecret(s.value("board_bridge/secret").toByteArray());
+    cfg_.gptAccountId = s.value("board_bridge/gpt_account_id",0).toInt();
+    cfg_.gptPassword = credentials::decryptSecret(s.value("board_bridge/gpt_secret").toByteArray());
     cfg_.consolePath = s.value("board_bridge/console_path",
         QCoreApplication::applicationDirPath() + "/robomind-console/RoboMindConsole.exe").toString();
     registrationTimeout_.setSingleShot(true);
@@ -79,6 +82,84 @@ BoardConnection::BoardConnection(QObject* parent, const QString& profileDir) : Q
 
 BoardConnection::~BoardConnection() { stop(); }
 
+namespace {
+QString aiProfilePath(int slot, bool verified)
+{
+    return QStringLiteral("board_ai_profiles/%1/%2").arg(slot).arg(verified ? "verified" : "draft");
+}
+
+QVariantMap profileValues(const BoardConnection::AiProfile& profile, const QByteArray& encrypted)
+{
+    return {{"provider",profile.provider},{"endpoint",profile.endpoint},{"model",profile.model},
+            {"secret",encrypted},{"reasoning_effort",profile.reasoningEffort},{"verified_at",profile.verifiedAt}};
+}
+}
+
+QString BoardConnection::aiProfileName(int slot)
+{
+    static const QStringList names{"DeepSeek","GPT","配置 3"};
+    return names.value(slot);
+}
+
+BoardConnection::AiProfile BoardConnection::aiProfile(int slot, bool verified) const
+{
+    if (slot < 0 || slot >= AiProfileCount) return {};
+    const auto p = QSettings().value(aiProfilePath(slot,verified)).toMap();
+    return {p.value("provider",slot == 2 ? "anthropic" : "openai").toString(),
+            p.value("endpoint",slot == 1 && !verified ? "https://agentrouter.org/v1" : "").toString(),
+            p.value("model",slot == 1 && !verified ? "gpt-6.2-sol" : "").toString(),
+            credentials::decryptSecret(p.value("secret").toByteArray()),p.value("reasoning_effort").toString(),
+            p.value("verified_at").toLongLong()};
+}
+
+bool BoardConnection::saveAiProfile(int slot, const AiProfile& profile, bool verified)
+{
+    if (slot < 0 || slot >= AiProfileCount) return false;
+    const auto secret = profile.key.isEmpty() ? QByteArray() : credentials::encryptSecret(profile.key);
+    if (!profile.key.isEmpty() && secret.isEmpty()) return false;
+    QSettings settings;
+    settings.setValue(aiProfilePath(slot,verified),profileValues(profile,secret));
+    settings.sync();
+    return settings.status() == QSettings::NoError;
+}
+
+void BoardConnection::migrateAiProfiles()
+{
+    QSettings settings;
+    const auto path = aiProfilePath(0,false);
+    if (settings.contains(path) || !settings.contains("board_ai/endpoint") || cfg_.aiEndpoint.isEmpty()) return;
+    const auto values = profileValues({cfg_.aiProvider,cfg_.aiEndpoint,cfg_.aiModel,cfg_.aiKey,cfg_.aiReasoningEffort},
+                                      settings.value("board_ai/secret").toByteArray());
+    settings.setValue(path,values);
+    if (cfg_.aiEnabled && !cfg_.aiModel.isEmpty() && !cfg_.aiKey.isEmpty() &&
+        !settings.contains(aiProfilePath(0,true)))
+        settings.setValue(aiProfilePath(0,true),values); // Active legacy baseline, without inventing a verification date.
+    settings.sync();
+}
+
+void BoardConnection::applyPrimaryAiProfile(const AiProfile& profile)
+{
+    if (profile.verifiedAt <= 0 || profile.key.isEmpty()) return;
+    const bool restart = running();
+    auto config = cfg_;
+    config.aiProvider=profile.provider;
+    config.aiEndpoint=profile.endpoint;
+    config.aiModel=profile.model;
+    config.aiKey=profile.key;
+    config.aiReasoningEffort=profile.reasoningEffort;
+    config.aiEnabled=true;
+    configure(config);
+    if (restart) start();
+}
+
+void BoardConnection::applyGptAiProfile()
+{
+    if (running() && cfg_.gptAccountId > 0 && cfg_.gptAccountId != cfg_.accountId && !cfg_.gptPassword.isEmpty()) {
+        stop();
+        start();
+    }
+}
+
 void BoardConnection::configure(const Config& config)
 {
     stop();
@@ -109,6 +190,8 @@ void BoardConnection::saveConfig()
     s.setValue("board_bridge/group_id", cfg_.groupId);
     s.setValue("board_bridge/account_id", cfg_.accountId);
     s.setValue("board_bridge/secret", credentials::encryptSecret(cfg_.password));
+    s.setValue("board_bridge/gpt_account_id",cfg_.gptAccountId);
+    s.setValue("board_bridge/gpt_secret",credentials::encryptSecret(cfg_.gptPassword));
     s.setValue("board_bridge/console_path", cfg_.consolePath);
     s.setValue("board_bridge/voice_provider",cfg_.voiceProvider);
     if (cfg_.accountId > 0) s.setValue("board_account_id", cfg_.accountId);
@@ -190,6 +273,21 @@ void BoardConnection::launchConsole()
     env.insert("ROBOMIND_AI_MAX_TOKENS",QString::number(cfg_.aiMaxTokens));env.insert("ROBOMIND_AI_TIMEOUT_SECONDS",QString::number(cfg_.aiTimeoutSeconds));
     env.insert("ROBOMIND_AI_DAILY_LIMIT",QString::number(cfg_.aiDailyLimit));env.insert("ROBOMIND_AI_INTERVAL_SECONDS",QString::number(cfg_.aiIntervalSeconds));
     env.insert("ROBOMIND_AI_CONCURRENCY",QString::number(cfg_.aiConcurrency));env.insert("ROBOMIND_AI_USAGE_FILE",profileDir_+"/ai-usage.json");
+    for (const auto& name : env.keys())
+        if (name.startsWith("ROBOMIND_GPT_")) env.remove(name);
+    const auto gpt = aiProfile(1,true);
+    if (cfg_.gptAccountId > 0 && cfg_.gptAccountId != cfg_.accountId && !cfg_.gptPassword.isEmpty()
+        && gpt.verifiedAt > 0 && !gpt.endpoint.isEmpty() && !gpt.model.isEmpty() && !gpt.key.isEmpty()) {
+        env.insert("ROBOMIND_GPT_ENABLED","1");
+        env.insert("ROBOMIND_GPT_USER_ID",QString::number(cfg_.gptAccountId));
+        env.insert("ROBOMIND_GPT_PASSWORD",cfg_.gptPassword);
+        env.insert("ROBOMIND_GPT_PROVIDER",gpt.provider);
+        env.insert("ROBOMIND_GPT_ENDPOINT",gpt.endpoint);
+        env.insert("ROBOMIND_GPT_MODEL",gpt.model);
+        env.insert("ROBOMIND_GPT_REASONING_EFFORT",gpt.reasoningEffort);
+        env.insert("ROBOMIND_GPT_KEY",gpt.key);
+        env.insert("ROBOMIND_GPT_USAGE_FILE",profileDir_+"/gpt-ai-usage.json");
+    }
     proc_.setProcessEnvironment(env);
     proc_.setWorkingDirectory(profileDir_);
     QStringList arguments={"--bridge", "--port", QString::number(cfg_.listenPort),
@@ -294,8 +392,8 @@ void BoardConnection::pollLogs(){
 bool BoardConnection::navigate(const QString& action,QString* requestId)
 {
     const auto display=snapshot().value("display").toObject();
-    const QStringList allowed={"home","inbox","ppm","link","device","detail","next","previous","read","scroll_down","scroll_up","lang_zh","lang_en","immersion","terminal","audio_test","stop_speech","volume_10","volume_20","volume_30","volume_40","volume_50"};
-    if(!display.value("terminal_ready").toBool()||!display.value("navigation").toBool()||!allowed.contains(action)||QFile::exists(profileDir_+"/navigation.request"))return false;
+    const QStringList allowed={"home","inbox","ppm","link","device","detail","next","previous","read","scroll_down","scroll_up","lang_zh","lang_en","immersion","immersion_dragon","terminal","audio_test","stop_speech","volume_10","volume_20","volume_30","volume_40","volume_50"};
+    if(!display.value("terminal_ready").toBool()||!display.value("navigation").toBool()||!allowed.contains(action)||(action=="immersion_dragon"&&!display.value("dragon_supported").toBool())||QFile::exists(profileDir_+"/navigation.request"))return false;
     QSaveFile file(profileDir_+"/navigation.request");
     if(!file.open(QIODevice::WriteOnly))return false;
     const QString id=QUuid::createUuid().toString(QUuid::Id128);

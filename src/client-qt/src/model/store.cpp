@@ -8,12 +8,13 @@ void Store::setSelfId(int id) { selfId_ = id; }
 QString Store::directKey(int peerId) { return QStringLiteral("d:%1").arg(peerId); }
 QString Store::groupKey(int groupId) { return QStringLiteral("g:%1").arg(groupId); }
 
-void Store::upsertContact(int id, const QString& nickname, bool online)
+void Store::upsertContact(int id, const QString& nickname, bool online, int avatarId)
 {
     Contact c = contacts_.value(id);
     c.id = id;
     c.nickname = nickname;
     c.online = online;
+    c.avatarId = avatarId;
     contacts_.insert(id, c);
     emit changed();
 }

@@ -3,11 +3,12 @@
 #pragma once
 
 #include <QWidget>
+#include <QPixmap>
 
 class Avatar : public QWidget {
     Q_OBJECT
 public:
-    explicit Avatar(const QString& name, int diameter, QWidget* parent = nullptr);
+    explicit Avatar(const QString& name, int diameter, QWidget* parent = nullptr, int avatarId = 0);
     void setName(const QString& name);
 
 protected:
@@ -16,4 +17,5 @@ protected:
 private:
     QString name_;
     int diameter_;
+    QPixmap portrait_;
 };

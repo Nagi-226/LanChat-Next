@@ -21,6 +21,7 @@ struct ContactItem {
     QString time;
     bool online = false;
     int unread = 0;
+    int avatarId = 0;
 };
 
 // 板端告警条目：level 1=提示(蓝) 2=警告(琥珀) 3=严重(红)
